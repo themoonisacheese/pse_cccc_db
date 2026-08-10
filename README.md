@@ -10,7 +10,7 @@ on Puzzling Stack Exchange.
 - **Stack Exchange OAuth2** authentication — log in with your SE account
 - **Room-owner authorization** — only authorised room owners can add/edit clues
 - **REST API** with automatic OpenAPI/Swagger docs — designed for a future bot integration
-- **Transcript link parser** — paste a `chat.stackexchange.com/transcript/...` URL and auto-fill the clue entry form
+- **Transcript link parser** — paste a `chat.stackexchange.com/transcript/...` URL and auto-fill the clue entry form. Uses the RSS search feed (`/feeds/search/CCCC?room=14524`) for the 30 most recent CCCC messages, with an events API fallback for older messages.
 - **HTMX web UI** — live search, pagination, clue detail, stats — no SPA build step
 - **CSV import** — bulk import the existing ~9,600 clues from the Google Sheet export
 
@@ -112,13 +112,35 @@ The API is at `/api` with interactive docs at `/api/docs` (Swagger UI).
 GET /api/clues?author=Jafe&order_by=clue_date&order_dir=desc&page=1&page_size=20
 ```
 
-## Stack Exchange OAuth Setup
+## Stack Exchange Auth Setup
+
+### OAuth2 (for user login)
 
 1. Go to [Stack Apps](https://stackapps.com/apps/oauth/register) and register a new app.
-2. Set the redirect URI to `http://localhost:8000/auth/callback` (for local dev).
-3. Copy the Client ID and Client Secret into your `.env` file.
-4. Optionally add an API key for higher rate limits.
-5. Set `ROOM_OWNER_IDS` to a comma-separated list of SE user IDs who should be authorised as room owners.
+2. Set the OAuth domain and redirect URI to your deployment URL (e.g. `https://cccc.poggers.website/api/auth/callback`).
+3. Copy the Client ID and Client Secret into `.env` (`SE_CLIENT_ID`, `SE_CLIENT_SECRET`).
+4. Set `SE_KEY` to your Stack Apps API key — used for anonymous (unauthenticated) API requests. Authenticated users' tokens automatically take priority over this key.
+
+### Chat Bot Account (for transcript parsing & room owner detection)
+
+Chat pages on `chat.stackexchange.com` are behind Cloudflare. To access them, the app uses a bot account with email+password authentication via the [`sechat`](https://github.com/nvua/sechat) library, which caches session cookies to avoid repeated logins (and captcha challenges).
+
+1. Create a SE account dedicated to bot use (or repurpose an existing one).
+2. Set `SE_BOT_EMAIL` and `SE_BOT_PASSWORD` in `.env`.
+3. The bot authenticates once (or loads cached cookies), then uses the authenticated session to:
+   - Fetch room owner lists from `/rooms/info/{roomID}`
+   - Fetch message content via the RSS search feed `/feeds/search/CCCC?room={roomID}`
+   - Fall back to the events API (`/chats/{roomID}/events`) for older messages
+
+### Room Owner Authorization
+
+The app uses a layered approach to determine if a logged-in user is a room owner:
+
+1. **Allowlist** (`ROOM_OWNER_IDS` in `.env`): explicit comma-separated list of SE user IDs. Most reliable.
+2. **Chat API** (automatic): if the allowlist is empty, the bot fetches the room info page and extracts owner user IDs.
+3. **SE API moderator check**: all SE site moderators are automatically room owners.
+
+Non-moderator room owners who aren't in the allowlist will only be detected if the chat API is functional (bot credentials configured).
 
 ## Bot Integration (Future)
 
@@ -150,7 +172,8 @@ pse_cccc_db/
 │   ├── schemas/
 │   │   └── clue.py           # Pydantic schemas
 │   ├── services/
-│   │   └── transcript_parser.py  # Chat transcript HTML parser
+│   │   ├── transcript_parser.py  # Transcript link → clue data (RSS + events API)
+│   │   └── se_chat_client.py     # Authenticated SE Chat client (sechat + cookie cache)
 │   ├── static/
 │   │   └── style.css         # Dark theme CSS
 │   ├── templates/
