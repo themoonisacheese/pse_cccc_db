@@ -53,6 +53,35 @@ from app.core.config import get_settings
 from app.db.session import async_session, engine, Base
 from app.models.clue import Clue, User
 
+
+def _split_sql(sql: str) -> list[str]:
+    """Split SQL into individual statements, respecting $$ dollar-quoting."""
+    statements = []
+    current = []
+    in_dollar = False
+    i = 0
+    while i < len(sql):
+        if sql[i:i+2] == "$$":
+            in_dollar = not in_dollar
+            current.append("$$")
+            i += 2
+        elif sql[i] == ";" and not in_dollar:
+            stmt = "".join(current).strip()
+            if stmt:
+                lines = [l for l in stmt.split("\n") if not l.strip().startswith("--")]
+                clean = "\n".join(lines).strip()
+                if clean:
+                    statements.append(clean)
+            current = []
+            i += 1
+        else:
+            current.append(sql[i])
+            i += 1
+    remaining = "".join(current).strip()
+    if remaining:
+        statements.append(remaining)
+    return statements
+
 CSV_URL = "https://copyparty.poggers.website/sharex/Puzzling%20Stack%20Exchange%20Chat%20Cryptic%20Clue%20Chains%20-%20Sheet1.csv?k=n9t9hBBY"
 
 # Header row is at CSV line index 12 (0-based), data starts at index 13
@@ -176,11 +205,12 @@ async def import_clues(clue_dicts: list[dict]):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # Apply FTS migration
+        # Apply FTS migration (split by $$ dollar-quoting for asyncpg)
         migration_path = Path(__file__).parent / "migration_001_fts.sql"
         if migration_path.exists():
             migration_sql = migration_path.read_text()
-            await conn.execute(text(migration_sql))
+            for stmt in _split_sql(migration_sql):
+                await conn.execute(text(stmt))
             print("Applied FTS migration")
 
     # Insert clues in batches
