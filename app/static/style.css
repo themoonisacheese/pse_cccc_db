@@ -209,6 +209,50 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
 .leaderboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
 .leaderboard h2 { margin-bottom: 1rem; }
 
+/* ── Stats (expanded) ──────────────────── */
+.stat-cards { grid-template-columns: repeat(3, 1fr) !important; }
+.stats-section { margin-bottom: 2.5rem; }
+.stats-section h2 { margin-bottom: 1rem; }
+.stats-desc { color: var(--fg-dim); font-size: 0.9rem; margin-bottom: 1rem; }
+
+.leaderboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem; }
+.leaderboard-header h2 { margin: 0; }
+.period-tabs { display: flex; gap: 0.25rem; }
+.period-tab {
+    padding: 0.3rem 0.75rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    color: var(--fg-dim);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    text-decoration: none;
+}
+.period-tab:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.period-tab.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 500; }
+
+.bar-chart { display: flex; flex-direction: column; gap: 0.35rem; max-height: 400px; overflow-y: auto; }
+.bar-row { display: flex; align-items: center; gap: 0.5rem; }
+.bar-label { font-family: var(--mono); font-size: 0.75rem; color: var(--fg-dim); min-width: 60px; text-align: right; }
+.bar-track { flex: 1; background: var(--bg-card); border-radius: 4px; overflow: hidden; height: 20px; }
+.bar-fill { background: var(--accent); height: 100%; border-radius: 4px; transition: width 0.3s; }
+.bar-count { font-family: var(--mono); font-size: 0.8rem; color: var(--fg); min-width: 30px; }
+
+.records-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.record-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border-soft);
+}
+.record-label { color: var(--fg-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; }
+.record-value { font-size: 0.95rem; line-height: 1.4; }
+.mono-solution { font-family: var(--mono); color: var(--green); font-weight: 600; }
+
+@media (max-width: 768px) {
+    .stat-cards { grid-template-columns: 1fr 1fr !important; }
+    .records-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Error ─────────────────────────────── */
 .error-page { text-align: center; padding: 4rem; }
 .error-page h1 { font-size: 2rem; margin-bottom: 1rem; }

@@ -385,41 +385,166 @@ async def admin_page(request: Request):
 
 
 @app.get("/stats", response_class=HTMLResponse)
-async def stats_page(request: Request):
+async def stats_page(request: Request, period: str = "all"):
     """Statistics page."""
     from sqlalchemy import select, func
     from app.models.clue import Clue
+    from datetime import date, timedelta
 
     user = getattr(request.state, "user", None)
+
+    today = date.today()
+    if period == "year":
+        date_from = date(today.year, 1, 1)
+    elif period == "month":
+        date_from = date(today.year, today.month, 1)
+    elif period == "30d":
+        date_from = today - timedelta(days=30)
+    else:
+        date_from = None
+
     async with async_session() as db:
+        # ── Overview stats (always all-time) ──
         total = (await db.execute(select(func.count(Clue.id)))).scalar()
         total_authors = (
             await db.execute(select(func.count(func.distinct(Clue.author))))
         ).scalar()
-
-        # Top 20 authors
-        top_authors = (
+        total_solvers = (
             await db.execute(
-                select(Clue.author, func.count().label("cnt"))
-                .group_by(Clue.author)
-                .order_by(func.count().desc())
-                .limit(20)
+                select(func.count(func.distinct(Clue.solver))).where(
+                    Clue.solver.isnot(None)
+                )
             )
-        ).all()
-
-        # Top 20 solvers
-        top_solvers = (
+        ).scalar()
+        unsolved = (
             await db.execute(
-                select(Clue.solver, func.count().label("cnt"))
-                .where(Clue.solver.isnot(None))
-                .group_by(Clue.solver)
-                .order_by(func.count().desc())
-                .limit(20)
+                select(func.count(Clue.id)).where(Clue.solution.is_(None))
             )
-        ).all()
+        ).scalar()
 
         first_date = (await db.execute(select(func.min(Clue.clue_date)))).scalar()
         last_date = (await db.execute(select(func.max(Clue.clue_date)))).scalar()
+
+        # ── Leaderboards (filtered by period) ──
+        author_q = (
+            select(Clue.author, func.count().label("cnt"))
+            .group_by(Clue.author)
+            .order_by(func.count().desc())
+            .limit(20)
+        )
+        solver_q = (
+            select(Clue.solver, func.count().label("cnt"))
+            .where(Clue.solver.isnot(None))
+            .group_by(Clue.solver)
+            .order_by(func.count().desc())
+            .limit(20)
+        )
+        if date_from is not None:
+            author_q = author_q.where(Clue.clue_date >= date_from)
+            solver_q = solver_q.where(Clue.clue_date >= date_from)
+
+        top_authors = (await db.execute(author_q)).all()
+        top_solvers = (await db.execute(solver_q)).all()
+
+        # ── Records & curiosities ──
+        longest_clue = (
+            await db.execute(
+                select(
+                    Clue.id,
+                    Clue.clue_text,
+                    func.length(Clue.clue_text).label("len"),
+                )
+                .order_by(func.length(Clue.clue_text).desc())
+                .limit(1)
+            )
+        ).first()
+
+        shortest_clue = (
+            await db.execute(
+                select(
+                    Clue.id,
+                    Clue.clue_text,
+                    func.length(Clue.clue_text).label("len"),
+                )
+                .where(func.length(Clue.clue_text) > 0)
+                .order_by(func.length(Clue.clue_text).asc())
+                .limit(1)
+            )
+        ).first()
+
+        longest_sol = (
+            await db.execute(
+                select(
+                    Clue.id,
+                    Clue.solution,
+                    func.length(Clue.solution).label("len"),
+                )
+                .where(Clue.solution.isnot(None))
+                .order_by(func.length(Clue.solution).desc())
+                .limit(1)
+            )
+        ).first()
+
+        # Most repeated solutions (top 5)
+        most_repeated = (
+            await db.execute(
+                select(Clue.solution, func.count().label("cnt"))
+                .where(Clue.solution.isnot(None))
+                .group_by(Clue.solution)
+                .order_by(func.count().desc())
+                .limit(5)
+            )
+        ).all()
+
+        # Oldest unsolved clue
+        oldest_unsolved = (
+            await db.execute(
+                select(
+                    Clue.id,
+                    Clue.legacy_number,
+                    Clue.clue_text,
+                    Clue.author,
+                    Clue.clue_date,
+                )
+                .where(Clue.solution.is_(None))
+                .order_by(Clue.clue_date.asc())
+                .limit(1)
+            )
+        ).first()
+
+        # Busiest days (top 5)
+        busiest_days = (
+            await db.execute(
+                select(Clue.clue_date, func.count().label("cnt"))
+                .where(Clue.clue_date.isnot(None))
+                .group_by(Clue.clue_date)
+                .order_by(func.count().desc())
+                .limit(5)
+            )
+        ).all()
+
+        # Nemeses (top 10 author→solver pairs)
+        nemeses = (
+            await db.execute(
+                select(Clue.author, Clue.solver, func.count().label("cnt"))
+                .where(Clue.solver.isnot(None))
+                .group_by(Clue.author, Clue.solver)
+                .order_by(func.count().desc())
+                .limit(10)
+            )
+        ).all()
+
+        # Clues per month (for chart)
+        month_expr = func.to_char(Clue.clue_date, "YYYY-MM")
+        per_month = (
+            await db.execute(
+                select(month_expr.label("month"), func.count().label("cnt"))
+                .where(Clue.clue_date.isnot(None))
+                .group_by(month_expr)
+                .order_by(month_expr)
+            )
+        ).all()
+        max_monthly = max((r[1] for r in per_month), default=1)
 
     return templates.TemplateResponse(
         "stats.html",
@@ -428,9 +553,21 @@ async def stats_page(request: Request):
             "user": user,
             "total_clues": total,
             "total_authors": total_authors,
+            "total_solvers": total_solvers,
+            "unsolved": unsolved,
             "top_authors": top_authors,
             "top_solvers": top_solvers,
             "first_date": first_date,
             "last_date": last_date,
+            "period": period,
+            "longest_clue": longest_clue,
+            "shortest_clue": shortest_clue,
+            "longest_solution": longest_sol,
+            "most_repeated": most_repeated,
+            "oldest_unsolved": oldest_unsolved,
+            "busiest_days": busiest_days,
+            "nemeses": nemeses,
+            "per_month": per_month,
+            "max_monthly": max_monthly,
         },
     )
