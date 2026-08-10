@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}CCCC DB — Home{% endblock %}
+{% block content %}
+<div class="hero">
+    <h1>Cryptic Clue Chat Chains</h1>
+    <p class="hero-sub">
+        The archive of {{ "{:,}".format(total_clues) }} cryptic clues from
+        <a href="https://chat.stackexchange.com/rooms/14524">The Sphinx's Lair</a>
+        on Puzzling Stack Exchange.
+    </p>
+</div>
+
+<div class="search-box">
+    <form action="/search" method="get" class="search-form">
+        <input type="text" name="q" placeholder="Search clues, solutions, explanations…"
+               class="search-input" autocomplete="off">
+        <button type="submit" class="btn">Search</button>
+    </form>
+    <div class="search-hints">
+        <a href="/search?author=Jafe">Clues by Jafe</a> ·
+        <a href="/search?q=anagram">Anagram clues</a> ·
+        <a href="/search?solution=CHAIN">"CHAIN" solutions</a> ·
+        <a href="/search?date_from=2016-11-15&date_to=2016-11-15">First day</a>
+    </div>
+</div>
+
+<div class="latest-clues">
+    <h2>Latest Clues</h2>
+    <table class="clue-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Clue</th>
+                <th>Author</th>
+                <th>Solver</th>
+                <th>Solution</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for clue in latest_clues %}
+            <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}'">
+                <td class="clue-num">{{ clue.legacy_number }}</td>
+                <td class="clue-text">{{ clue.clue_text[:100] }}{% if clue.clue_text|length > 100 %}…{% endif %}</td>
+                <td>{{ clue.author }}</td>
+                <td>{{ clue.solver or '—' }}</td>
+                <td class="clue-solution">{{ clue.solution[:30] }}{% if clue.solution|length > 30 %}…{% endif %}</td>
+                <td>{{ clue.clue_date or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="/search" class="btn btn-outline">Browse all clues →</a>
+</div>
+{% endblock %}

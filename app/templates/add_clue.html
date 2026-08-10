@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Add Clue — CCCC DB{% endblock %}
+{% block content %}
+<div class="add-clue-page">
+    <h1>Add a Clue</h1>
+
+    <div class="transcript-import">
+        <h3>Import from transcript link</h3>
+        <p>Enter a chat.stackexchange.com transcript URL to auto-fill fields:</p>
+        <div class="import-row">
+            <input type="text" id="transcript-url" placeholder="https://chat.stackexchange.com/transcript/message/…"
+                   class="search-input">
+            <button class="btn" id="parse-transcript-btn"
+                    hx-get="/api/transcript/parse"
+                    hx-target="#import-result"
+                    hx-include="#transcript-url"
+                    hx-on::after-request="fillFormFromResult(event)">
+                Parse
+            </button>
+        </div>
+        <div id="import-result"></div>
+    </div>
+
+    <form action="/api/clues" method="post" class="clue-form" id="clue-form">
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="transcript_link">Transcript Link</label>
+                <input type="url" name="transcript_link" id="transcript_link" class="form-input">
+            </div>
+            <div class="form-field">
+                <label for="legacy_number">Legacy Number (auto-assigned if blank)</label>
+                <input type="number" name="legacy_number" id="legacy_number" class="form-input">
+            </div>
+            <div class="form-field form-field-full">
+                <label for="clue_text">Clue Text *</label>
+                <textarea name="clue_text" id="clue_text" class="form-input" required rows="2"></textarea>
+            </div>
+            <div class="form-field">
+                <label for="author">Author *</label>
+                <input type="text" name="author" id="author" class="form-input" required>
+            </div>
+            <div class="form-field">
+                <label for="solver">Solver</label>
+                <input type="text" name="solver" id="solver" class="form-input">
+            </div>
+            <div class="form-field">
+                <label for="solution">Solution *</label>
+                <input type="text" name="solution" id="solution" class="form-input" required>
+            </div>
+            <div class="form-field">
+                <label for="clue_date">Date</label>
+                <input type="date" name="clue_date" id="clue_date" class="form-input">
+            </div>
+            <div class="form-field">
+                <label for="answer_length">Answer Length</label>
+                <input type="number" name="answer_length" id="answer_length" class="form-input">
+            </div>
+            <div class="form-field">
+                <label for="clue_length">Clue Length</label>
+                <input type="number" name="clue_length" id="clue_length" class="form-input">
+            </div>
+            <div class="form-field form-field-full">
+                <label for="explanation">Explanation</label>
+                <textarea name="explanation" id="explanation" class="form-input" rows="3"></textarea>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn">Create Clue</button>
+            <a href="/" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function fillFormFromResult(event) {
+    if (event.detail.successful) {
+        try {
+            var data = JSON.parse(event.detail.xhr.responseText);
+            if (data.author) document.getElementById('author').value = data.author;
+            if (data.date) document.getElementById('clue_date').value = data.date;
+            if (data.content) document.getElementById('clue_text').value = data.content;
+            if (data.url) document.getElementById('transcript_link').value = data.url;
+        } catch(e) { console.error('Could not parse transcript result:', e); }
+    }
+}
+</script>
+{% endblock %}

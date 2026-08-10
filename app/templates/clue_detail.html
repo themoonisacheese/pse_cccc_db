@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Clue #{{ clue.legacy_number }} — CCCC DB{% endblock %}
+{% block content %}
+<div class="clue-detail">
+    <div class="clue-detail-header">
+        <h1>Clue #{{ clue.legacy_number }}</h1>
+        {% if clue.clue_date %}
+        <span class="clue-date">{{ clue.clue_date }}</span>
+        {% endif %}
+    </div>
+
+    <div class="clue-detail-body">
+        <div class="detail-section">
+            <h3>Clue</h3>
+            <p class="clue-text-full">{{ clue.clue_text }}</p>
+            {% if clue.clue_length %}
+            <span class="meta-tag">{{ clue.clue_length }} characters</span>
+            {% endif %}
+            {% if clue.standard_clue is not none %}
+            <span class="meta-tag">Standard clue: {{ clue.standard_clue }}</span>
+            {% endif %}
+        </div>
+
+        <div class="detail-grid">
+            <div class="detail-section">
+                <h3>Author</h3>
+                <p>{{ clue.author }}</p>
+                {% if clue.clues_by_author_so_far %}
+                <span class="meta-tag">#{{ clue.clues_by_author_so_far }} by this author</span>
+                {% endif %}
+            </div>
+            <div class="detail-section">
+                <h3>Solver</h3>
+                <p>{{ clue.solver or '—' }}</p>
+                {% if clue.override_solver %}
+                <span class="meta-tag">Override: {{ clue.override_solver }}</span>
+                {% endif %}
+            </div>
+            <div class="detail-section">
+                <h3>Solution</h3>
+                <p class="clue-solution-full">{{ clue.solution }}</p>
+                {% if clue.answer_length %}
+                <span class="meta-tag">{{ clue.answer_length }} letters</span>
+                {% endif %}
+                {% if clue.answer_count %}
+                <span class="meta-tag">Appears {{ clue.answer_count }}×</span>
+                {% endif %}
+            </div>
+            <div class="detail-section">
+                <h3>Grid Answer</h3>
+                <p>{{ clue.answer_in_grid or '—' }}</p>
+            </div>
+        </div>
+
+        {% if clue.explanation %}
+        <div class="detail-section">
+            <h3>Explanation</h3>
+            <p class="explanation">{{ clue.explanation }}</p>
+        </div>
+        {% endif %}
+
+        {% if clue.transcript_link %}
+        <div class="detail-section">
+            <h3>Transcript</h3>
+            <a href="{{ clue.transcript_link }}" target="_blank" rel="noopener" class="btn btn-small btn-outline">
+                View on chat.stackexchange.com →
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="clue-detail-footer">
+        {% if user and (user.is_room_owner or user.is_admin) %}
+        <a href="/clue/{{ clue.id }}/edit" class="btn btn-small">Edit</a>
+        {% endif %}
+        <a href="/search?author={{ clue.author }}" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
+        {% if clue.solver %}
+        <a href="/search?solver={{ clue.solver }}" class="btn btn-small btn-outline">More solved by {{ clue.solver }}</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

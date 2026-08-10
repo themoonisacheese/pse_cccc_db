@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CCCC DB{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@2.0.2" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/">CCCC DB</a>
+            <span class="nav-tagline">Cryptic Clue Chat Chains</span>
+        </div>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/search">Browse</a>
+            <a href="/stats">Stats</a>
+            {% if user %}
+                <a href="/add" class="btn btn-small">+ Add Clue</a>
+                <span class="user-badge" title="{{ user.display_name }}">
+                    {{ user.display_name }}
+                </span>
+                {% if user.is_room_owner %}
+                    <span class="badge badge-owner">Room Owner</span>
+                {% endif %}
+                <a href="/api/auth/logout" class="btn btn-small btn-outline">Logout</a>
+            {% else %}
+                <a href="/api/auth/login" class="btn btn-small btn-outline">Login with SE</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>
+            CCCC DB —
+            <a href="https://github.com/themoonisacheese/pse_cccc_db">Source on GitHub</a> —
+            API docs at <a href="/api/docs">/api/docs</a>
+        </p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

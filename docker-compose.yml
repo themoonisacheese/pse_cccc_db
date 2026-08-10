@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cccc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cccc}
+      POSTGRES_DB: ${POSTGRES_DB:-cccc}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cccc}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cccc}:${POSTGRES_PASSWORD:-cccc}@db:5432/${POSTGRES_DB:-cccc}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-cccc}:${POSTGRES_PASSWORD:-cccc}@db:5432/${POSTGRES_DB:-cccc}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: >
+      sh -c "
+        python scripts/import_csv.py --limit 100 &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+volumes:
+  pgdata:

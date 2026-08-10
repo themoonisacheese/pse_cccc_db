@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Stats — CCCC DB{% endblock %}
+{% block content %}
+<div class="stats-page">
+    <h1>Statistics</h1>
+
+    <div class="stat-cards">
+        <div class="stat-card">
+            <div class="stat-value">{{ "{:,}".format(total_clues) }}</div>
+            <div class="stat-label">Total Clues</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ "{:,}".format(total_authors) }}</div>
+            <div class="stat-label">Distinct Authors</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ first_date or '—' }}</div>
+            <div class="stat-label">First Clue</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ last_date or '—' }}</div>
+            <div class="stat-label">Last Clue</div>
+        </div>
+    </div>
+
+    <div class="leaderboard-grid">
+        <div class="leaderboard">
+            <h2>Top Authors</h2>
+            <table class="clue-table">
+                <thead>
+                    <tr><th>Rank</th><th>Author</th><th>Clues</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in top_authors %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><a href="/search?author={{ row[0] }}">{{ row[0] }}</a></td>
+                        <td>{{ row[1] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="leaderboard">
+            <h2>Top Solvers</h2>
+            <table class="clue-table">
+                <thead>
+                    <tr><th>Rank</th><th>Solver</th><th>Solves</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in top_solvers %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><a href="/search?solver={{ row[0] }}">{{ row[0] }}</a></td>
+                        <td>{{ row[1] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

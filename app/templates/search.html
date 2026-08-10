@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Search — CCCC DB{% endblock %}
+{% block content %}
+<div class="search-page">
+    <h1>Search Clues</h1>
+
+    <form id="search-form" class="search-filters">
+        <div class="filter-row">
+            <input type="text" name="q" value="{{ q }}" placeholder="Full-text search…"
+                   class="search-input" hx-get="/search" hx-target="#results"
+                   hx-trigger="keyup changed delay:400ms" hx-include="this"
+                   autocomplete="off">
+        </div>
+        <div class="filter-row filter-grid">
+            <div class="filter-field">
+                <label>Author</label>
+                <input type="text" name="author" value="{{ author }}"
+                       hx-get="/search" hx-target="#results" hx-trigger="keyup changed delay:400ms"
+                       hx-include="#search-form" autocomplete="off">
+            </div>
+            <div class="filter-field">
+                <label>Solver</label>
+                <input type="text" name="solver" value="{{ solver }}"
+                       hx-get="/search" hx-target="#results" hx-trigger="keyup changed delay:400ms"
+                       hx-include="#search-form" autocomplete="off">
+            </div>
+            <div class="filter-field">
+                <label>Solution</label>
+                <input type="text" name="solution" value="{{ solution }}"
+                       hx-get="/search" hx-target="#results" hx-trigger="keyup changed delay:400ms"
+                       hx-include="#search-form" autocomplete="off">
+            </div>
+        </div>
+    </form>
+
+    <div id="results">
+        {% include "partials/clue_results.html" %}
+    </div>
+</div>
+{% endblock %}

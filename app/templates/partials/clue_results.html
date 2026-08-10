@@ -1,0 +1,49 @@
+<div class="result-meta">
+    <span class="result-count">{{ "{:,}".format(total) }} clue{{ "" if total == 1 else "s" }} found</span>
+    {% if total_pages > 1 %}
+    <span class="pagination-info">Page {{ page }} of {{ total_pages }}</span>
+    {% endif %}
+</div>
+
+<table class="clue-table">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Clue</th>
+            <th>Author</th>
+            <th>Solver</th>
+            <th>Solution</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for clue in clues %}
+        <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}'">
+            <td class="clue-num">{{ clue.legacy_number }}</td>
+            <td class="clue-text">{{ clue.clue_text[:120] }}{% if clue.clue_text|length > 120 %}…{% endif %}</td>
+            <td>{{ clue.author }}</td>
+            <td>{{ clue.solver or '—' }}</td>
+            <td class="clue-solution">{{ clue.solution[:40] }}{% if clue.solution|length > 40 %}…{% endif %}</td>
+            <td>{{ clue.clue_date or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" class="empty-state">No clues found. Try different search terms.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="/search?q={{ q }}&author={{ author }}&solver={{ solver }}&solution={{ solution }}&page={{ page - 1 }}"
+       class="btn btn-small">← Prev</a>
+    {% endif %}
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="/search?q={{ q }}&author={{ author }}&solver={{ solver }}&solution={{ solution }}&page={{ page + 1 }}"
+       class="btn btn-small">Next →</a>
+    {% endif %}
+</div>
+{% endif %}
