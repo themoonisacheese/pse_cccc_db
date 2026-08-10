@@ -16,6 +16,15 @@
                class="search-input" autocomplete="off">
         <button type="submit" class="btn">Search</button>
     </form>
+    <form action="/search" method="get" class="search-filters-home">
+        <input type="text" name="author" placeholder="Author (e.g. Jafe)"
+               class="filter-input" autocomplete="off">
+        <input type="text" name="solver" placeholder="Solver"
+               class="filter-input" autocomplete="off">
+        <input type="text" name="solution" placeholder="Solution contains…"
+               class="filter-input" autocomplete="off">
+        <button type="submit" class="btn btn-outline btn-small">Filter</button>
+    </form>
     <div class="search-hints">
         <a href="/search?author=Jafe">Clues by Jafe</a> ·
         <a href="/search?q=anagram">Anagram clues</a> ·
@@ -45,7 +54,7 @@
                 <td>{{ clue.author }}</td>
                 <td>{{ clue.solver or '—' }}</td>
                 <td class="clue-solution">{{ clue.solution[:30] }}{% if clue.solution|length > 30 %}…{% endif %}</td>
-                <td>{{ clue.clue_date or '—' }}</td>
+                <td title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</td>
             </tr>
             {% endfor %}
         </tbody>

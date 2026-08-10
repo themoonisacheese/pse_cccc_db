@@ -18,10 +18,8 @@ class ClueBase(BaseModel):
     override_solver: Optional[str] = None
     solution: str
     one_word_answer_length: Optional[int] = None
-    answer_in_grid: Optional[str] = None
     answer_count: Optional[int] = None
     explanation: Optional[str] = None
-    standard_clue: Optional[bool] = None
     clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None
     clues_by_author_so_far: Optional[int] = None
@@ -40,10 +38,8 @@ class ClueUpdate(BaseModel):
     override_solver: Optional[str] = None
     solution: Optional[str] = None
     one_word_answer_length: Optional[int] = None
-    answer_in_grid: Optional[str] = None
     answer_count: Optional[int] = None
     explanation: Optional[str] = None
-    standard_clue: Optional[bool] = None
     clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None
     clues_by_author_so_far: Optional[int] = None

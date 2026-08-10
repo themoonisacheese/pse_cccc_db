@@ -175,12 +175,10 @@ def parse_csv_rows(csv_text: str, limit: int | None = None) -> list[dict]:
             "clue_date": parse_date(getcol(7)),
             "transcript_link": getcol(8),
             "one_word_answer_length": parse_int(getcol(10)),
-            "answer_in_grid": getcol(11),
             "answer_count": parse_int(getcol(12)),
             "override_solver": getcol(13) or None,
             "solver": getcol(14) or None,
             "solution": getcol(15),
-            "standard_clue": parse_bool(getcol(16)),
             "explanation": getcol(17) or None,
         }
 

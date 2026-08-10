@@ -78,6 +78,18 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
     font-family: var(--sans);
 }
 .search-input:focus { outline: none; border-color: var(--accent); }
+.search-filters-home { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+.filter-input {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    font-family: var(--sans);
+}
+.filter-input:focus { outline: none; border-color: var(--accent); }
 .search-hints { color: var(--fg-dim); font-size: 0.85rem; }
 .search-hints a { color: var(--accent); }
 

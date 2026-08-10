@@ -1,6 +1,7 @@
 """Main FastAPI application factory."""
 
 from contextlib import asynccontextmanager
+from datetime import datetime, date
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -20,6 +21,32 @@ settings = get_settings()
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+def _relative_date(d):
+    """Format a date as relative if < 7 days, otherwise ISO date."""
+    if d is None:
+        return "—"
+    today = date.today()
+    if isinstance(d, datetime):
+        d = d.date()
+    if not isinstance(d, date):
+        return str(d)
+    delta = (today - d).days
+    if delta == 0:
+        return "Today"
+    elif delta == 1:
+        return "Yesterday"
+    elif delta == -1:
+        return "Tomorrow"
+    elif 0 < delta < 7:
+        return f"{delta} days ago"
+    elif -7 < delta < 0:
+        return f"In {-delta} days"
+    return d.isoformat()
+
+
+templates.env.filters["rel_date"] = _relative_date
 
 
 def _split_sql(sql: str) -> list[str]:
@@ -58,7 +85,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         # Run all migrations in order
-        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql"]:
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql"]:
             migration_path = BASE_DIR.parent / "scripts" / migration_file
             if migration_path.exists():
                 migration_sql = migration_path.read_text()

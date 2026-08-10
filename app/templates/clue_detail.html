@@ -5,7 +5,7 @@
     <div class="clue-detail-header">
         <h1>Clue #{{ clue.legacy_number }}</h1>
         {% if clue.clue_date %}
-        <span class="clue-date">{{ clue.clue_date }}</span>
+        <span class="clue-date" title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</span>
         {% endif %}
     </div>
 
@@ -15,9 +15,6 @@
             <p class="clue-text-full">{{ clue.clue_text }}</p>
             {% if clue.clue_length %}
             <span class="meta-tag">{{ clue.clue_length }} characters</span>
-            {% endif %}
-            {% if clue.standard_clue is not none %}
-            <span class="meta-tag">Standard clue: {{ clue.standard_clue }}</span>
             {% endif %}
         </div>
 
@@ -42,13 +39,9 @@
                 {% if clue.answer_length %}
                 <span class="meta-tag">{{ clue.answer_length }} letters</span>
                 {% endif %}
-                {% if clue.answer_count %}
+                {% if clue.answer_count and clue.answer_count > 1 %}
                 <span class="meta-tag">Appears {{ clue.answer_count }}×</span>
                 {% endif %}
-            </div>
-            <div class="detail-section">
-                <h3>Grid Answer</h3>
-                <p>{{ clue.answer_in_grid or '—' }}</p>
             </div>
         </div>
 

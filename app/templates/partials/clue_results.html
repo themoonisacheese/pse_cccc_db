@@ -24,7 +24,7 @@
             <td>{{ clue.author }}</td>
             <td>{{ clue.solver or '—' }}</td>
             <td class="clue-solution">{{ clue.solution[:40] }}{% if clue.solution|length > 40 %}…{% endif %}</td>
-            <td>{{ clue.clue_date or '—' }}</td>
+            <td title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</td>
         </tr>
         {% else %}
         <tr>
