@@ -58,7 +58,7 @@ def _init_bot_sync():
     bot.login(
         email=settings.se_bot_email,
         password=settings.se_bot_password,
-        host=f"{settings.se_site}.stackexchange.com",
+        host=settings.se_site,
     )
 
     logger.info(f"sechat bot logged in as chat user {bot.userID}")

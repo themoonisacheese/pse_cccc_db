@@ -89,7 +89,7 @@ async def get_se_user_info(access_token: str) -> dict:
         "access_token": access_token,
         "key": settings.se_key,
         "site": settings.se_site,
-        "filter": "!0Sv-d2k3TjmRFS",  # include user_type
+        # user_type is included in the default filter
     }
     async with httpx.AsyncClient() as client:
         resp = await client.get(
@@ -123,7 +123,9 @@ async def check_room_owner(access_token: str, se_user_id: int) -> bool:
     Strategy (in priority order):
     1. If ROOM_OWNER_IDS is configured, check the allowlist.
     2. If SE_BOT_EMAIL is configured, fetch room owners from the chat API
-       and cross-reference the user's site ID with chat owner IDs.
+       and cross-reference by display name (the SE API's site→chat ID
+       mapping is unreliable; name matching against the room info page
+       is simpler and works).
     3. If the user is a site moderator (user_type == "moderator"),
        they are automatically a room owner of all rooms.
 
@@ -144,67 +146,29 @@ async def check_room_owner(access_token: str, se_user_id: int) -> bool:
                 logger.info(f"User {se_user_id} is a site moderator → room owner")
                 return True
 
-            # Fetch room owners from chat and cross-reference
-            # We need to find the user's chat user ID from their site user ID.
-            # The chat user profile page redirects to the site profile,
-            # so we go the other direction: get site users who are chat users.
-            #
-            # However, the room info page lists chat user IDs, not site user IDs.
-            # We need to cross-reference.  The SE API has no direct chat↔site
-            # mapping, but the chat user profile redirects to the site profile.
-            # We can look up each room owner's chat profile to get their site ID.
-            #
-            # This is expensive (one request per owner), so we cache it.
-            # For now, as a simpler approach: use the SE API to get the user's
-            # associated chat accounts.
-            is_owner = await _check_room_owner_via_chat(se_user_id)
-            if is_owner is not None:
-                return is_owner
+            # Fetch room owners from chat and cross-reference by name
+            owner_names = await se_chat_client.get_room_owner_names(
+                settings.se_chat_room_id
+            )
+            user_name = user_info.get("display_name", "").lower()
+            for owner_name in owner_names.values():
+                if owner_name.lower() == user_name:
+                    logger.info(
+                        f"User {se_user_id} ({user_info['display_name']}) "
+                        f"matched room owner by name"
+                    )
+                    return True
+
+            logger.info(
+                f"User {se_user_id} ({user_info.get('display_name')}) "
+                f"is not a room owner. Owners: {list(owner_names.values())}"
+            )
+            return False
 
         except Exception as e:
             logger.warning(f"Chat API room-owner check failed: {e}")
 
     return False
-
-
-async def _check_room_owner_via_chat(se_user_id: int) -> Optional[bool]:
-    """Cross-reference the SE site user ID with chat room owners.
-
-    Uses the SE API to find the user's chat account, then checks if
-    that chat user ID is in the room owners list.
-    """
-    try:
-        # Get the user's associated accounts from the SE API
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"https://api.stackexchange.com/2.3/users/{se_user_id}/associated",
-                params={
-                    "key": settings.se_key,
-                    "types": "chat_user",
-                    "filter": "!0Sv-d2k3TjmRFS",
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            items = data.get("items", [])
-
-            # Find the chat user ID on chat.stackexchange.com
-            chat_user_id = None
-            for item in items:
-                if "chat.stackexchange.com" in item.get("site_url", ""):
-                    chat_user_id = item.get("user_id")
-                    break
-
-            if not chat_user_id:
-                return False  # User has no chat account on this server
-
-        # Now check if this chat user ID is in the room owners list
-        owner_ids = await se_chat_client.get_room_owners(settings.se_chat_room_id)
-        return chat_user_id in owner_ids
-
-    except Exception as e:
-        logger.warning(f"Failed to cross-reference room ownership: {e}")
-        return None
 
 
 def set_session_cookie(response: Response, user_id: int, se_user_id: int):
