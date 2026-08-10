@@ -269,6 +269,47 @@ async def clue_by_legacy(request: Request, legacy_number: int):
     return RedirectResponse(url=f"/clue/{clue.id}", status_code=301)
 
 
+@app.get("/clue/{clue_id}/edit", response_class=HTMLResponse)
+async def edit_clue_form(request: Request, clue_id: int):
+    """Edit form for an existing clue (editors and admins only)."""
+    from sqlalchemy import select
+    from app.models.clue import Clue
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(
+            url=f"/api/auth/login?redirect_after=/clue/{clue_id}/edit",
+            status_code=303,
+        )
+    if not user.is_editor and not user.is_admin:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "You don't have permission to edit clues. A diamond moderator may grant you these permissions.",
+                "user": user,
+            },
+            status_code=403,
+        )
+
+    async with async_session() as db:
+        result = await db.execute(select(Clue).where(Clue.id == clue_id))
+        clue = result.scalar_one_or_none()
+
+    if not clue:
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Clue not found", "user": user},
+            status_code=404,
+        )
+
+    return templates.TemplateResponse(
+        "edit_clue.html",
+        {"request": request, "clue": clue, "user": user},
+    )
+
+
 @app.get("/add", response_class=HTMLResponse)
 async def add_clue_form(request: Request):
     """Form to add a new clue (editors and admins only)."""

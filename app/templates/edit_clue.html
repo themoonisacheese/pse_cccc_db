@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Edit Clue #{{ clue.legacy_number }} — CCCC DB{% endblock %}
+{% block content %}
+<div class="add-clue-page">
+    <h1>Edit Clue #{{ clue.legacy_number }}</h1>
+
+    <form id="clue-form" class="clue-form">
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="transcript_link">Transcript Link</label>
+                <input type="url" name="transcript_link" id="transcript_link" class="form-input"
+                       value="{{ clue.transcript_link or '' }}">
+            </div>
+            <div class="form-field">
+                <label for="legacy_number">Legacy Number</label>
+                <input type="number" name="legacy_number" id="legacy_number" class="form-input"
+                       value="{{ clue.legacy_number or '' }}">
+            </div>
+            <div class="form-field form-field-full">
+                <label for="clue_text">Clue Text *</label>
+                <textarea name="clue_text" id="clue_text" class="form-input" required rows="2">{{ clue.clue_text or '' }}</textarea>
+            </div>
+            <div class="form-field">
+                <label for="author">Author *</label>
+                <input type="text" name="author" id="author" class="form-input" required
+                       value="{{ clue.author or '' }}">
+            </div>
+            <div class="form-field">
+                <label for="solver">Solver</label>
+                <input type="text" name="solver" id="solver" class="form-input"
+                       value="{{ clue.solver or '' }}">
+            </div>
+            <div class="form-field">
+                <label for="solution">Solution *</label>
+                <input type="text" name="solution" id="solution" class="form-input" required
+                       value="{{ clue.solution or '' }}">
+            </div>
+            <div class="form-field">
+                <label for="clue_date">Date</label>
+                <input type="date" name="clue_date" id="clue_date" class="form-input"
+                       value="{{ clue.clue_date or '' }}">
+            </div>
+            <div class="form-field">
+                <label for="answer_in_grid">Grid Answer</label>
+                <input type="text" name="answer_in_grid" id="answer_in_grid" class="form-input"
+                       value="{{ clue.answer_in_grid or '' }}">
+            </div>
+            <div class="form-field">
+                <label for="standard_clue">Standard Clue</label>
+                <input type="checkbox" name="standard_clue" id="standard_clue"
+                       {% if clue.standard_clue %}checked{% endif %}>
+            </div>
+            <div class="form-field form-field-full">
+                <label for="explanation">Explanation</label>
+                <textarea name="explanation" id="explanation" class="form-input" rows="3">{{ clue.explanation or '' }}</textarea>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn">Save Changes</button>
+            <a href="/clue/{{ clue.id }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+    <div id="form-result"></div>
+</div>
+
+<script>
+document.getElementById('clue-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = Object.fromEntries(new FormData(form).entries());
+    // Remove empty strings so ClueUpdate exclude_unset works properly
+    for (const [k, v] of Object.entries(data)) {
+        if (v === '') delete data[k];
+    }
+    // legacy_number must be int if present
+    if (data.legacy_number) data.legacy_number = parseInt(data.legacy_number);
+    // standard_clue is a checkbox — send true/false
+    data.standard_clue = document.getElementById('standard_clue').checked;
+
+    const resp = await fetch('/api/clues/{{ clue.id }}', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    });
+    if (resp.ok) {
+        window.location.href = '/clue/{{ clue.id }}';
+    } else {
+        const err = await resp.json().catch(() => ({}));
+        document.getElementById('form-result').innerHTML =
+            `<p class="error">Error: ${err.detail || resp.statusText}</p>`;
+    }
+});
+</script>
+{% endblock %}
