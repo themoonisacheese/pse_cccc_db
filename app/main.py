@@ -28,13 +28,24 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         migration_path = BASE_DIR.parent / "scripts" / "migration_001_fts.sql"
         if migration_path.exists():
-            # Use raw asyncpg connection to execute multi-statement SQL.
-            # SQLAlchemy's text() can't send multiple statements via asyncpg.
-            raw_conn = await engine.raw_connection()
+            # Connect with raw asyncpg to execute multi-statement SQL.
+            # SQLAlchemy's asyncpg dialect uses prepared statements, which
+            # can't handle multiple SQL statements (CREATE FUNCTION + CREATE TRIGGER).
+            import asyncpg
+            from sqlalchemy.dialects.postgresql.asyncpg import dialect as asyncpg_dialect
+            # Extract connection params from the SQLAlchemy URL
+            url = engine.url
+            raw_pg_conn = await asyncpg.connect(
+                host=url.host,
+                port=url.port or 5432,
+                user=url.username,
+                password=url.password,
+                database=url.database,
+            )
             try:
-                await raw_conn.execute(migration_sql)
+                await raw_pg_conn.execute(migration_sql)
             finally:
-                await raw_conn.close()
+                await raw_pg_conn.close()
     yield
     # Close the SE Chat session if it was opened
     from app.services import se_chat_client
