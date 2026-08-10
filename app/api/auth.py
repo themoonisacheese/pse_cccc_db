@@ -80,16 +80,14 @@ async def exchange_code_for_token(code: str) -> str:
 async def get_se_user_info(access_token: str) -> dict:
     """Fetch the authenticated user's SE account info.
 
-    When an OAuth access_token is available, it is used for authentication.
-    The app-level API key is NOT sent alongside the token — the SE API
-    rejects requests that include both an rl_-prefixed key and an
-    access_token ("key is not valid for passed access_token").
-    The key is only used for anonymous (unauthenticated) requests.
+    The app-level API key is sent alongside the token — the SE API
+    requires a key when an access_token is present.
 
     Returns a dict with user_id, display_name, profile_link, and user_type.
     """
     params = {
         "access_token": access_token,
+        "key": settings.se_key,
         "site": settings.se_site,
         "filter": "!0Sv-d2k3TjmRFS",  # include user_type
     }
