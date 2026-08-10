@@ -191,6 +191,14 @@ async def create_clue(
     user = _check_write_perm(request)
     clue = Clue(**clue_in.model_dump())
     clue.entered_by_user_id = user.id
+
+    # Auto-assign legacy_number if not provided
+    if clue.legacy_number is None:
+        max_num = (
+            await db.execute(select(func.max(Clue.legacy_number)))
+        ).scalar()
+        clue.legacy_number = (max_num or 0) + 1
+
     db.add(clue)
     await db.commit()
     await db.refresh(clue)
