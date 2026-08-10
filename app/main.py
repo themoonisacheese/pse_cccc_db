@@ -263,20 +263,31 @@ async def clue_detail(request: Request, clue_id: int):
     from app.models.clue import Clue
 
     user = getattr(request.state, "user", None)
+    from sqlalchemy import func
     async with async_session() as db:
         result = await db.execute(select(Clue).where(Clue.id == clue_id))
         clue = result.scalar_one_or_none()
 
-    if not clue:
-        return templates.TemplateResponse(
-            "error.html",
-            {"request": request, "message": "Clue not found", "user": user},
-            status_code=404,
-        )
+        if not clue:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Clue not found", "user": user},
+                status_code=404,
+            )
+
+        # Compute "Nth clue solved by this solver" dynamically
+        clues_by_solver_so_far = None
+        if clue.solver and clue.legacy_number:
+            clues_by_solver_so_far = await db.scalar(
+                select(func.count()).select_from(Clue).where(
+                    Clue.solver == clue.solver,
+                    Clue.legacy_number <= clue.legacy_number,
+                )
+            )
 
     return templates.TemplateResponse(
         "clue_detail.html",
-        {"request": request, "clue": clue, "user": user},
+        {"request": request, "clue": clue, "clues_by_solver_so_far": clues_by_solver_so_far, "user": user},
     )
 
 
