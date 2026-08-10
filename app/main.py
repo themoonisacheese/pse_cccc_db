@@ -21,6 +21,35 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+def _split_sql(sql: str) -> list[str]:
+    """Split SQL into individual statements, respecting $$ dollar-quoting."""
+    statements = []
+    current = []
+    in_dollar = False
+    i = 0
+    while i < len(sql):
+        if sql[i:i+2] == "$$":
+            in_dollar = not in_dollar
+            current.append("$$")
+            i += 2
+        elif sql[i] == ";" and not in_dollar:
+            stmt = "".join(current).strip()
+            if stmt:
+                lines = [l for l in stmt.split("\n") if not l.strip().startswith("--")]
+                clean = "\n".join(lines).strip()
+                if clean:
+                    statements.append(clean)
+            current = []
+            i += 1
+        else:
+            current.append(sql[i])
+            i += 1
+    remaining = "".join(current).strip()
+    if remaining:
+        statements.append(remaining)
+    return statements
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: create tables and apply FTS migration."""
@@ -28,24 +57,13 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         migration_path = BASE_DIR.parent / "scripts" / "migration_001_fts.sql"
         if migration_path.exists():
-            # Connect with raw asyncpg to execute multi-statement SQL.
-            # SQLAlchemy's asyncpg dialect uses prepared statements, which
-            # can't handle multiple SQL statements (CREATE FUNCTION + CREATE TRIGGER).
-            import asyncpg
-            from sqlalchemy.dialects.postgresql.asyncpg import dialect as asyncpg_dialect
-            # Extract connection params from the SQLAlchemy URL
-            url = engine.url
-            raw_pg_conn = await asyncpg.connect(
-                host=url.host,
-                port=url.port or 5432,
-                user=url.username,
-                password=url.password,
-                database=url.database,
-            )
-            try:
-                await raw_pg_conn.execute(migration_sql)
-            finally:
-                await raw_pg_conn.close()
+            from sqlalchemy import text
+            migration_sql = migration_path.read_text()
+            # Split SQL into individual statements, respecting $$ dollar-quoting.
+            # asyncpg (and SQLAlchemy's asyncpg dialect) can't execute multiple
+            # statements in a single prepared statement.
+            for stmt in _split_sql(migration_sql):
+                await conn.execute(text(stmt))
     yield
     # Close the SE Chat session if it was opened
     from app.services import se_chat_client
