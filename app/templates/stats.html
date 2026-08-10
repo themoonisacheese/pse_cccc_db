@@ -11,11 +11,7 @@
         </div>
         <div class="stat-card">
             <div class="stat-value">{{ "{:,}".format(total_authors) }}</div>
-            <div class="stat-label">Distinct Authors</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ "{:,}".format(total_solvers) }}</div>
-            <div class="stat-label">Distinct Solvers</div>
+            <div class="stat-label">Distinct People</div>
         </div>
         <div class="stat-card">
             <div class="stat-value">{{ unsolved }}</div>
@@ -49,10 +45,10 @@
     </div>
     {% endif %}
 
-    {# ── Leaderboards with period filter ── #}
+    {# ── Leaderboard with period filter ── #}
     <div class="stats-section">
         <div class="leaderboard-header">
-            <h2>Leaderboards</h2>
+            <h2>Leaderboard</h2>
             <div class="period-tabs">
                 <a href="/stats?period=all" class="period-tab{% if period == 'all' %} active{% endif %}">All-time</a>
                 <a href="/stats?period=year" class="period-tab{% if period == 'year' %} active{% endif %}">This Year</a>
@@ -60,42 +56,28 @@
                 <a href="/stats?period=30d" class="period-tab{% if period == '30d' %} active{% endif %}">Last 30d</a>
             </div>
         </div>
-        <div class="leaderboard-grid">
-            <div class="leaderboard">
-                <h3>Top Authors</h3>
-                <table class="clue-table">
-                    <thead>
-                        <tr><th>#</th><th>Author</th><th>Clues</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for row in top_authors %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td><a href="/search?author={{ row[0] }}">{{ row[0] }}</a></td>
-                            <td>{{ row[1] }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <div class="leaderboard">
-                <h3>Top Solvers</h3>
-                <table class="clue-table">
-                    <thead>
-                        <tr><th>#</th><th>Solver</th><th>Solves</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for row in top_solvers %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td><a href="/search?solver={{ row[0] }}">{{ row[0] }}</a></td>
-                            <td>{{ row[1] }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <table class="clue-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Person</th>
+                    <th>Authored</th>
+                    <th>Solved</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in leaderboard %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><a href="/search?author={{ row[0] }}">{{ row[0] }}</a></td>
+                    <td>{{ row[1] }}</td>
+                    <td>{{ row[2] }}</td>
+                    <td>{{ row[1] + row[2] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     {# ── Nemeses ── #}

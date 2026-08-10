@@ -421,30 +421,38 @@ async def stats_page(request: Request, period: str = "all"):
                 select(func.count(Clue.id)).where(Clue.solution.is_(None))
             )
         ).scalar()
+        distinct_people = (
+            await db.execute(
+                select(func.count(func.distinct(Clue.author)))
+            )
+        ).scalar()
 
         first_date = (await db.execute(select(func.min(Clue.clue_date)))).scalar()
         last_date = (await db.execute(select(func.max(Clue.clue_date)))).scalar()
 
-        # ── Leaderboards (filtered by period) ──
-        author_q = (
-            select(Clue.author, func.count().label("cnt"))
-            .group_by(Clue.author)
-            .order_by(func.count().desc())
-            .limit(20)
-        )
-        solver_q = (
-            select(Clue.solver, func.count().label("cnt"))
+        # ── Combined leaderboard (filtered by period) ──
+        # Since every author is also a solver, show one table with both counts.
+        auth_cnt = func.count(Clue.id).label("authored")
+        # Subquery for solves per person
+        solve_sub = (
+            select(Clue.solver.label("person"), func.count().label("solved"))
             .where(Clue.solver.isnot(None))
             .group_by(Clue.solver)
-            .order_by(func.count().desc())
-            .limit(20)
+        ).subquery()
+        combined_q = (
+            select(
+                Clue.author.label("person"),
+                auth_cnt,
+                func.coalesce(solve_sub.c.solved, 0).label("solved"),
+            )
+            .outerjoin(solve_sub, solve_sub.c.person == Clue.author)
+            .group_by(Clue.author, solve_sub.c.solved)
+            .order_by((auth_cnt + func.coalesce(solve_sub.c.solved, 0)).desc())
+            .limit(25)
         )
         if date_from is not None:
-            author_q = author_q.where(Clue.clue_date >= date_from)
-            solver_q = solver_q.where(Clue.clue_date >= date_from)
-
-        top_authors = (await db.execute(author_q)).all()
-        top_solvers = (await db.execute(solver_q)).all()
+            combined_q = combined_q.where(Clue.clue_date >= date_from)
+        leaderboard = (await db.execute(combined_q)).all()
 
         # ── Records & curiosities ──
         longest_clue = (
@@ -552,11 +560,9 @@ async def stats_page(request: Request, period: str = "all"):
             "request": request,
             "user": user,
             "total_clues": total,
-            "total_authors": total_authors,
-            "total_solvers": total_solvers,
+            "total_authors": distinct_people,
             "unsolved": unsolved,
-            "top_authors": top_authors,
-            "top_solvers": top_solvers,
+            "leaderboard": leaderboard,
             "first_date": first_date,
             "last_date": last_date,
             "period": period,
