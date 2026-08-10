@@ -22,7 +22,7 @@
         <div id="import-result"></div>
     </div>
 
-    <form action="/api/clues" method="post" class="clue-form" id="clue-form">
+    <form class="clue-form" id="clue-form">
         <div class="form-grid">
             <div class="form-field">
                 <label for="transcript_link">Transcript Link</label>
@@ -76,5 +76,25 @@ function fillFormFromResult(event) {
         } catch(e) { console.error('Could not parse transcript result:', e); }
     }
 }
+
+document.getElementById('clue-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = Object.fromEntries(new FormData(form).entries());
+    // Remove empty legacy_number so backend auto-assigns
+    if (!data.legacy_number) delete data.legacy_number;
+    const resp = await fetch('/api/clues', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    });
+    if (resp.ok) {
+        const clue = await resp.json();
+        window.location.href = '/clue/' + clue.id;
+    } else {
+        const err = await resp.json();
+        alert('Error: ' + JSON.stringify(err));
+    }
+});
 </script>
 {% endblock %}
