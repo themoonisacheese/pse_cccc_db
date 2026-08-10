@@ -53,14 +53,21 @@ class Clue(Base):
     legacy_number: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
 
     clue_text: Mapped[str] = mapped_column(Text)
-    clue_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # clue_length is a generated column: LENGTH(clue_text) — not settable
+    clue_length: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, server_default=text("LENGTH(clue_text)")
+    )
 
     author: Mapped[str] = mapped_column(String(255), index=True)
     solver: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     override_solver: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     solution: Mapped[str] = mapped_column(Text, index=True)
-    answer_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # answer_length is a generated column: letter count of solution (ignoring spaces/hyphens)
+    answer_length: Mapped[int | None] = mapped_column(
+        Integer, nullable=True,
+        server_default=text("LENGTH(REPLACE(REPLACE(solution, ' ', ''), '-', ''))")
+    )
     one_word_answer_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
     answer_in_grid: Mapped[str | None] = mapped_column(Text, nullable=True)
     answer_count: Mapped[int | None] = mapped_column(Integer, nullable=True)

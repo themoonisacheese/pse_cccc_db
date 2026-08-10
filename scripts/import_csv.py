@@ -168,14 +168,12 @@ def parse_csv_rows(csv_text: str, limit: int | None = None) -> list[dict]:
 
         clue_data = {
             "legacy_number": legacy_num,
-            "clue_length": parse_int(getcol(1)),
             "clue_text": getcol(2),
             "clues_by_author_so_far": parse_int(getcol(3)),
             "author": getcol(4) or "Unknown",
             "number_on_date": parse_int(getcol(6)),
             "clue_date": parse_date(getcol(7)),
             "transcript_link": getcol(8),
-            "answer_length": parse_int(getcol(9)),
             "one_word_answer_length": parse_int(getcol(10)),
             "answer_in_grid": getcol(11),
             "answer_count": parse_int(getcol(12)),

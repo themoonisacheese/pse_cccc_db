@@ -13,12 +13,10 @@ from pydantic import BaseModel, Field
 
 class ClueBase(BaseModel):
     clue_text: str
-    clue_length: Optional[int] = None
     author: str
     solver: Optional[str] = None
     override_solver: Optional[str] = None
     solution: str
-    answer_length: Optional[int] = None
     one_word_answer_length: Optional[int] = None
     answer_in_grid: Optional[str] = None
     answer_count: Optional[int] = None
@@ -37,12 +35,10 @@ class ClueCreate(ClueBase):
 
 class ClueUpdate(BaseModel):
     clue_text: Optional[str] = None
-    clue_length: Optional[int] = None
     author: Optional[str] = None
     solver: Optional[str] = None
     override_solver: Optional[str] = None
     solution: Optional[str] = None
-    answer_length: Optional[int] = None
     one_word_answer_length: Optional[int] = None
     answer_in_grid: Optional[str] = None
     answer_count: Optional[int] = None
@@ -57,6 +53,9 @@ class ClueUpdate(BaseModel):
 
 class ClueOut(ClueBase):
     id: int
+    # Computed fields (generated columns — not settable, but returned for display)
+    answer_length: Optional[int] = None
+    clue_length: Optional[int] = None
     entered_by_user_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime

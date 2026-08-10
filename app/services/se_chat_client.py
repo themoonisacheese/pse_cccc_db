@@ -209,12 +209,23 @@ def _get_message_by_rss_sync(
             if m:
                 chat_user_id = int(m.group(1))
 
-        # Raw content from <title> (markdown), HTML from <summary>
-        raw_content = title_el.text if title_el is not None else ""
+        # The <title> element is truncated for long messages.
+        # The <summary> element contains the full message as HTML.
+        # Use <summary> (stripped of tags) as the primary content source,
+        # falling back to <title> only if <summary> is absent.
         html_content = summary_el.text if summary_el is not None else ""
+        title_content = title_el.text if title_el is not None else ""
 
-        # Unescape HTML entities in the raw content
-        raw_content = html.unescape(raw_content)
+        # Unescape HTML entities
+        html_content = html.unescape(html_content)
+        title_content = html.unescape(title_content)
+
+        # Strip HTML tags from the summary to get plain text
+        if html_content:
+            soup = BeautifulSoup(html_content, "html.parser")
+            raw_content = soup.get_text()
+        else:
+            raw_content = title_content
 
         return {
             "message_id": message_id,

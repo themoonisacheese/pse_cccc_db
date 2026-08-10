@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         # Run all migrations in order
-        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql"]:
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql"]:
             migration_path = BASE_DIR.parent / "scripts" / migration_file
             if migration_path.exists():
                 migration_sql = migration_path.read_text()

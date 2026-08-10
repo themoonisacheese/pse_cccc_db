@@ -13,6 +13,7 @@
             <button class="btn" id="parse-transcript-btn"
                     hx-get="/api/transcript/parse"
                     hx-target="#import-result"
+                    hx-swap="none"
                     hx-include="#transcript-url"
                     hx-on::after-request="fillFormFromResult(event)">
                 Parse
@@ -50,14 +51,6 @@
             <div class="form-field">
                 <label for="clue_date">Date</label>
                 <input type="date" name="clue_date" id="clue_date" class="form-input">
-            </div>
-            <div class="form-field">
-                <label for="answer_length">Answer Length</label>
-                <input type="number" name="answer_length" id="answer_length" class="form-input">
-            </div>
-            <div class="form-field">
-                <label for="clue_length">Clue Length</label>
-                <input type="number" name="clue_length" id="clue_length" class="form-input">
             </div>
             <div class="form-field form-field-full">
                 <label for="explanation">Explanation</label>

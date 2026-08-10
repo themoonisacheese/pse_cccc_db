@@ -70,7 +70,7 @@
     </div>
 
     <div class="clue-detail-footer">
-        {% if user and (user.is_room_owner or user.is_admin) %}
+        {% if user and (user.is_editor or user.is_admin) %}
         <a href="/clue/{{ clue.id }}/edit" class="btn btn-small">Edit</a>
         {% endif %}
         <a href="/search?author={{ clue.author }}" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
