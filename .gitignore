@@ -2,9 +2,16 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+.env.local
+.env.production
 *.egg-info/
 dist/
 build/
 .venv/
 venv/
 *.db
+# Ensure secrets never get committed
+secrets.json
+credentials*.json
+*.pem
+*.key

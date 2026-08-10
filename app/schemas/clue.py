@@ -1,6 +1,8 @@
 """Pydantic schemas for API input/output validation."""
 
-from datetime import date, datetime
+from __future__ import annotations
+
+from datetime import date as date_type, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -22,7 +24,7 @@ class ClueBase(BaseModel):
     answer_count: Optional[int] = None
     explanation: Optional[str] = None
     standard_clue: Optional[bool] = None
-    clue_date: Optional[date] = None
+    clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None
     clues_by_author_so_far: Optional[int] = None
     transcript_link: Optional[str] = None
@@ -46,7 +48,7 @@ class ClueUpdate(BaseModel):
     answer_count: Optional[int] = None
     explanation: Optional[str] = None
     standard_clue: Optional[bool] = None
-    clue_date: Optional[date] = None
+    clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None
     clues_by_author_so_far: Optional[int] = None
     transcript_link: Optional[str] = None
@@ -80,8 +82,8 @@ class ClueSearch(BaseModel):
     author: Optional[str] = None
     solver: Optional[str] = None
     solution: Optional[str] = None  # exact/ILIKE solution search
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: Optional[date_type] = None
+    date_to: Optional[date_type] = None
     legacy_number: Optional[int] = None
     transcript_link: Optional[str] = None
     order_by: str = "legacy_number"
@@ -113,7 +115,7 @@ class AuthorStat(BaseModel):
 
 
 class DateStat(BaseModel):
-    date: date
+    date: date_type
     count: int
 
 
@@ -126,8 +128,8 @@ class StatsOut(BaseModel):
     longest_clue: Optional[str] = None
     most_repeated_solution: Optional[str] = None
     date_with_most_clues: Optional[DateStat] = None
-    first_clue_date: Optional[date] = None
-    last_clue_date: Optional[date] = None
+    first_clue_date: Optional[date_type] = None
+    last_clue_date: Optional[date_type] = None
 
 
 # ── Transcript parse result ─────────────────────────────────
@@ -139,7 +141,7 @@ class TranscriptParseResult(BaseModel):
     url: str
     message_id: Optional[int] = None
     author: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[date_type] = None
     content: Optional[str] = None
     success: bool = False
     error: Optional[str] = None

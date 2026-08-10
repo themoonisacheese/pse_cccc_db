@@ -33,6 +33,9 @@ async def lifespan(app: FastAPI):
             migration_sql = migration_path.read_text()
             await conn.execute(text(migration_sql))
     yield
+    # Close the SE Chat session if it was opened
+    from app.services import se_chat_client
+    await se_chat_client.close_session()
     await engine.dispose()
 
 
