@@ -62,7 +62,7 @@ class Clue(Base):
     solver: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     override_solver: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    solution: Mapped[str] = mapped_column(Text, index=True)
+    solution: Mapped[str | None] = mapped_column(Text, index=True, nullable=True)
     # answer_length is a generated column: letter count of solution (ignoring spaces/hyphens)
     answer_length: Mapped[int | None] = mapped_column(
         Integer, nullable=True,

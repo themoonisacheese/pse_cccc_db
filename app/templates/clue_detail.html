@@ -35,12 +35,16 @@
             </div>
             <div class="detail-section">
                 <h3>Solution</h3>
+                {% if clue.solution %}
                 <p class="clue-solution-full">{{ clue.solution }}</p>
                 {% if clue.answer_length %}
                 <span class="meta-tag">{{ clue.answer_length }} letters</span>
                 {% endif %}
                 {% if clue.answer_count and clue.answer_count > 1 %}
                 <span class="meta-tag">Appears {{ clue.answer_count }}×</span>
+                {% endif %}
+                {% else %}
+                <p class="text-muted">Not yet solved</p>
                 {% endif %}
             </div>
         </div>

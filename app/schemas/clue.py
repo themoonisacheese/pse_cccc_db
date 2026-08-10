@@ -16,7 +16,7 @@ class ClueBase(BaseModel):
     author: str
     solver: Optional[str] = None
     override_solver: Optional[str] = None
-    solution: str
+    solution: Optional[str] = None
     one_word_answer_length: Optional[int] = None
     answer_count: Optional[int] = None
     explanation: Optional[str] = None
