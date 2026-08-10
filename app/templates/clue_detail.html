@@ -38,8 +38,8 @@
             </div>
             <div class="detail-section">
                 <h3>Solution</h3>
-                {% if clue.solution %}
-                <p class="clue-solution-full">{{ clue.solution }}</p>
+                {% if clue.solution is not none %}
+                <p class="clue-solution-full">{{ clue.solution if clue.solution else '(empty string)' }}</p>
                 {% if clue.answer_length %}
                 <span class="meta-tag">{{ clue.answer_length }} letters</span>
                 {% endif %}

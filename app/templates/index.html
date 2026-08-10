@@ -53,7 +53,7 @@
                 <td class="clue-text">{{ clue.clue_text[:100] }}{% if clue.clue_text|length > 100 %}…{% endif %}</td>
                 <td>{{ clue.author }}</td>
                 <td>{{ clue.solver or '—' }}</td>
-                <td class="clue-solution">{{ clue.solution[:30] }}{% if clue.solution|length > 30 %}…{% endif %}</td>
+                <td class="clue-solution">{{ (clue.solution if clue.solution else '(empty)')[:30] }}{% if clue.solution and clue.solution|length > 30 %}…{% endif %}</td>
                 <td title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</td>
             </tr>
             {% endfor %}
