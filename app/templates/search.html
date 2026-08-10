@@ -31,6 +31,20 @@
                        hx-include="#search-form" autocomplete="off">
             </div>
         </div>
+        <div class="filter-row filter-grid">
+            <div class="filter-field">
+                <label>Date from</label>
+                <input type="date" name="date_from" value="{{ date_from }}"
+                       hx-get="/search" hx-target="#results" hx-trigger="change"
+                       hx-include="#search-form" autocomplete="off">
+            </div>
+            <div class="filter-field">
+                <label>Date to</label>
+                <input type="date" name="date_to" value="{{ date_to }}"
+                       hx-get="/search" hx-target="#results" hx-trigger="change"
+                       hx-include="#search-form" autocomplete="off">
+            </div>
+        </div>
     </form>
 
     <div id="results">

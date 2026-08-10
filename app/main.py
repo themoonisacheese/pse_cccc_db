@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, date
 from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -191,6 +192,8 @@ async def search_page(
     author: str = "",
     solver: str = "",
     solution: str = "",
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
     page: int = 1,
     page_size: int = 50,
 ):
@@ -216,6 +219,12 @@ async def search_page(
         if solution:
             query = query.where(Clue.solution.ilike(f"%{solution}%"))
             count_query = count_query.where(Clue.solution.ilike(f"%{solution}%"))
+        if date_from:
+            query = query.where(Clue.clue_date >= date_from)
+            count_query = count_query.where(Clue.clue_date >= date_from)
+        if date_to:
+            query = query.where(Clue.clue_date <= date_to)
+            count_query = count_query.where(Clue.clue_date <= date_to)
 
         offset = (page - 1) * page_size
         query = query.order_by(Clue.legacy_number).offset(offset).limit(page_size)
@@ -237,6 +246,8 @@ async def search_page(
             "author": author,
             "solver": solver,
             "solution": solution,
+            "date_from": date_from.isoformat() if date_from else "",
+            "date_to": date_to.isoformat() if date_to else "",
             "page": page,
             "page_size": page_size,
             "total": total,
