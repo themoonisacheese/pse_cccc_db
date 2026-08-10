@@ -199,7 +199,7 @@ def parse_csv_rows(csv_text: str, limit: int | None = None) -> list[dict]:
 
 
 async def import_clues(clue_dicts: list[dict]):
-    """Bulk insert clues into the database."""
+    """Upsert clues into the database (idempotent — safe to run multiple times)."""
     settings = get_settings()
 
     async with engine.begin() as conn:
@@ -213,21 +213,41 @@ async def import_clues(clue_dicts: list[dict]):
                 await conn.execute(text(stmt))
             print("Applied FTS migration")
 
-    # Insert clues in batches
+        # Add unique constraint on legacy_number if it doesn't exist
+        await conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_clues_legacy_number "
+            "ON clues (legacy_number) WHERE legacy_number IS NOT NULL"
+        ))
+
+    # Upsert clues in batches using ON CONFLICT
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     batch_size = 500
     total = len(clue_dicts)
-    inserted = 0
+    upserted = 0
 
     async with async_session() as session:
         for i in range(0, total, batch_size):
             batch = clue_dicts[i:i + batch_size]
-            objects = [Clue(**data) for data in batch]
-            session.add_all(objects)
-            await session.commit()
-            inserted += len(batch)
-            print(f"  Inserted {inserted:,}/{total:,} clues…")
 
-    print(f"\nDone! Inserted {inserted:,} clues.")
+            # Build a bulk upsert statement
+            stmt = pg_insert(Clue).values(batch)
+            # On conflict, update all fields except legacy_number
+            update_cols = {
+                k: getattr(stmt.excluded, k)
+                for k in batch[0].keys()
+                if k != "legacy_number"
+            }
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["legacy_number"],
+                set_=update_cols,
+            )
+            await session.execute(stmt)
+            await session.commit()
+            upserted += len(batch)
+            print(f"  Upserted {upserted:,}/{total:,} clues…")
+
+    print(f"\nDone! Upserted {upserted:,} clues.")
     await engine.dispose()
 
 
@@ -235,7 +255,21 @@ async def main():
     parser = argparse.ArgumentParser(description="Import CCCC CSV into database")
     parser.add_argument("--csv", type=str, help="Path to local CSV file")
     parser.add_argument("--limit", type=int, help="Only import first N clues (for testing)")
+    parser.add_argument(
+        "--if-empty", action="store_true",
+        help="Skip import if the clues table already has rows",
+    )
     args = parser.parse_args()
+
+    if args.if_empty:
+        # Check if clues table already has data
+        from sqlalchemy import select, func as sa_func
+        async with async_session() as session:
+            count = await session.scalar(select(sa_func.count(Clue.id)))
+        if count and count > 0:
+            print(f"Clues table already has {count:,} rows — skipping import.")
+            await engine.dispose()
+            return
 
     if args.csv:
         with open(args.csv, "r", encoding="utf-8") as f:

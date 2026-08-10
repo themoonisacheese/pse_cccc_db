@@ -30,7 +30,7 @@ services:
       - .:/app
     command: >
       sh -c "
-        python scripts/import_csv.py --limit 100 &&
+        python scripts/import_csv.py --csv /app/data.csv --if-empty &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
       "
 
