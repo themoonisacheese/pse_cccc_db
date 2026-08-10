@@ -137,6 +137,40 @@ async def list_clues(
     )
 
 
+@router.get("/export.csv")
+async def export_csv(db: AsyncSession = Depends(get_db)):
+    """Export all clues as CSV. Content is CC-BY-SA (Puzzling SE contributors)."""
+    result = await db.execute(
+        select(Clue).order_by(Clue.legacy_number)
+    )
+    clues = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "legacy_number", "clue_text", "clue_length", "author",
+        "solver", "override_solver", "solution", "answer_length",
+        "one_word_answer_length", "answer_count", "explanation",
+        "clue_date", "number_on_date", "clues_by_author_so_far",
+        "transcript_link",
+    ])
+    for c in clues:
+        writer.writerow([
+            c.legacy_number, c.clue_text, c.clue_length, c.author,
+            c.solver or "", c.override_solver or "", c.solution, c.answer_length,
+            c.one_word_answer_length or "", c.answer_count or "",
+            c.explanation or "", c.clue_date or "", c.number_on_date or "",
+            c.clues_by_author_so_far or "", c.transcript_link or "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=cccc_archive.csv"},
+    )
+
+
 @router.get("/{clue_id}", response_model=ClueOut)
 async def get_clue(clue_id: int, db: AsyncSession = Depends(get_db)):
     """Get a single clue by its database ID."""
@@ -332,37 +366,3 @@ async def get_solver_stats(db: AsyncSession = Depends(get_db)):
         .order_by(func.count().desc())
     )
     return [{"solver": row[0], "count": row[1]} for row in result]
-
-
-@router.get("/export.csv")
-async def export_csv(db: AsyncSession = Depends(get_db)):
-    """Export all clues as CSV. Content is CC-BY-SA (Puzzling SE contributors)."""
-    result = await db.execute(
-        select(Clue).order_by(Clue.legacy_number)
-    )
-    clues = result.scalars().all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "legacy_number", "clue_text", "clue_length", "author",
-        "solver", "override_solver", "solution", "answer_length",
-        "one_word_answer_length", "answer_count", "explanation",
-        "clue_date", "number_on_date", "clues_by_author_so_far",
-        "transcript_link",
-    ])
-    for c in clues:
-        writer.writerow([
-            c.legacy_number, c.clue_text, c.clue_length, c.author,
-            c.solver or "", c.override_solver or "", c.solution, c.answer_length,
-            c.one_word_answer_length or "", c.answer_count or "",
-            c.explanation or "", c.clue_date or "", c.number_on_date or "",
-            c.clues_by_author_so_far or "", c.transcript_link or "",
-        ])
-
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=cccc_archive.csv"},
-    )
