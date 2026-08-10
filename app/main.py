@@ -26,12 +26,16 @@ async def lifespan(app: FastAPI):
     """Startup: create tables and apply FTS migration."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Apply FTS trigger migration
         migration_path = BASE_DIR.parent / "scripts" / "migration_001_fts.sql"
         if migration_path.exists():
             from sqlalchemy import text
             migration_sql = migration_path.read_text()
-            await conn.execute(text(migration_sql))
+            # Split into individual statements — asyncpg can't execute
+            # multiple statements in a single prepared statement.
+            for stmt in migration_sql.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    await conn.execute(text(stmt))
     yield
     # Close the SE Chat session if it was opened
     from app.services import se_chat_client
