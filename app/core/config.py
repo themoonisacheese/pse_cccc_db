@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # The site domain to check room-ownership on
     se_chat_host: str = "chat.stackexchange.com"
     # OAuth redirect URI — must match what's registered on StackApps
-    se_oauth_redirect: str = "http://localhost:8000/auth/callback"
+    se_oauth_redirect: str = "http://localhost:8000/api/auth/callback"
 
     # ── Authorization ───────────────────────────────────────────
     # Comma-separated list of SE user IDs (as strings) who are

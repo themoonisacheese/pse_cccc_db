@@ -54,7 +54,7 @@ async def exchange_code_for_token(code: str) -> str:
         "redirect_uri": settings.se_oauth_redirect,
     }
     async with httpx.AsyncClient() as client:
-        resp = client.post(
+        resp = await client.post(
             "https://stackexchange.com/oauth/access_token",
             data=data,
             headers={"Accept": "application/json"},

@@ -17,6 +17,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS clues_search_vector_trigger ON clues;
 CREATE TRIGGER clues_search_vector_trigger
 BEFORE INSERT OR UPDATE ON clues
 FOR EACH ROW EXECUTE FUNCTION clues_search_vector_update();
