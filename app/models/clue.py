@@ -29,6 +29,7 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(255))
     profile_link: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_room_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_editor: Mapped[bool] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

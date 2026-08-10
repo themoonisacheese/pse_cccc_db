@@ -21,12 +21,19 @@
             <a href="/search">Browse</a>
             <a href="/stats">Stats</a>
             {% if user %}
-                <a href="/add" class="btn btn-small">+ Add Clue</a>
+                {% if user.is_editor or user.is_admin %}
+                    <a href="/add" class="btn btn-small">+ Add Clue</a>
+                {% endif %}
+                {% if user.is_admin %}
+                    <a href="/admin" class="btn btn-small btn-outline">Admin</a>
+                {% endif %}
                 <span class="user-badge" title="{{ user.display_name }}">
                     {{ user.display_name }}
                 </span>
-                {% if user.is_room_owner %}
-                    <span class="badge badge-owner">Room Owner</span>
+                {% if user.is_admin %}
+                    <span class="badge badge-owner">Admin ♦</span>
+                {% elif user.is_editor %}
+                    <span class="badge">Editor</span>
                 {% endif %}
                 <a href="/api/auth/logout" class="btn btn-small btn-outline">Logout</a>
             {% else %}

@@ -89,7 +89,6 @@ async def get_se_user_info(access_token: str) -> dict:
         "access_token": access_token,
         "key": settings.se_key,
         "site": settings.se_site,
-        # user_type is included in the default filter
     }
     async with httpx.AsyncClient() as client:
         resp = await client.get(
@@ -117,58 +116,24 @@ async def get_se_user_info(access_token: str) -> dict:
         }
 
 
-async def check_room_owner(access_token: str, se_user_id: int) -> bool:
-    """Check if the user is a room owner of the CCCC chatroom.
+async def check_permissions(access_token: str, se_user_id: int) -> tuple[bool, bool]:
+    """Check the user's permissions.
 
-    Strategy (in priority order):
-    1. If ROOM_OWNER_IDS is configured, check the allowlist.
-    2. If SE_BOT_EMAIL is configured, fetch room owners from the chat API
-       and cross-reference by display name (the SE API's site→chat ID
-       mapping is unreliable; name matching against the room info page
-       is simpler and works).
-    3. If the user is a site moderator (user_type == "moderator"),
-       they are automatically a room owner of all rooms.
+    Returns (is_admin, is_editor).
 
-    Returns True if the user is a room owner.
+    Diamond moderators (user_type == "moderator") are always admins.
+    Editors are looked up from the database (set by an admin).
+
     """
-    # 1. Allowlist (highest priority, most reliable)
-    if settings.owner_id_list:
-        return se_user_id in settings.owner_id_list
+    user_info = await get_se_user_info(access_token)
+    is_moderator = user_info.get("user_type") == "moderator"
 
-    # 2. Try the chat API room-owner check
-    if settings.se_bot_email and settings.se_bot_password:
-        try:
-            # Get user info to check moderator status
-            user_info = await get_se_user_info(access_token)
+    # Moderators are always admins
+    if is_moderator:
+        logger.info(f"User {se_user_id} is a diamond moderator → admin")
+        return True, True  # moderators are editors too
 
-            # Site moderators are automatic room owners
-            if user_info.get("user_type") == "moderator":
-                logger.info(f"User {se_user_id} is a site moderator → room owner")
-                return True
-
-            # Fetch room owners from chat and cross-reference by name
-            owner_names = await se_chat_client.get_room_owner_names(
-                settings.se_chat_room_id
-            )
-            user_name = user_info.get("display_name", "").lower()
-            for owner_name in owner_names.values():
-                if owner_name.lower() == user_name:
-                    logger.info(
-                        f"User {se_user_id} ({user_info['display_name']}) "
-                        f"matched room owner by name"
-                    )
-                    return True
-
-            logger.info(
-                f"User {se_user_id} ({user_info.get('display_name')}) "
-                f"is not a room owner. Owners: {list(owner_names.values())}"
-            )
-            return False
-
-        except Exception as e:
-            logger.warning(f"Chat API room-owner check failed: {e}")
-
-    return False
+    return False, False
 
 
 def set_session_cookie(response: Response, user_id: int, se_user_id: int):
@@ -240,8 +205,8 @@ async def callback(
     # Get user info
     user_info = await get_se_user_info(access_token)
 
-    # Check room-owner status
-    is_owner = await check_room_owner(access_token, user_info["user_id"])
+    # Check permissions (moderator → admin)
+    is_admin, is_editor = await check_permissions(access_token, user_info["user_id"])
 
     # Upsert user in DB
     result = await db.execute(
@@ -251,14 +216,19 @@ async def callback(
     if user:
         user.display_name = user_info["display_name"]
         user.profile_link = user_info["profile_link"]
-        user.is_room_owner = is_owner
+        user.is_room_owner = is_admin  # keep for backwards compat
+        if is_admin:
+            user.is_admin = True
+            user.is_editor = True
+        # Don't clear is_editor if it was set by an admin
     else:
         user = User(
             se_user_id=user_info["user_id"],
             display_name=user_info["display_name"],
             profile_link=user_info["profile_link"],
-            is_room_owner=is_owner,
-            is_admin=is_owner,  # First-time: room owners are admins
+            is_room_owner=is_admin,
+            is_admin=is_admin,
+            is_editor=is_editor,
         )
         db.add(user)
     await db.commit()

@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
+from app.api.admin import router as admin_router
 from app.api.auth import get_current_user, router as auth_router
 from app.api.clues import router as clues_router
 from app.api.transcript import router as transcript_router
@@ -52,18 +53,17 @@ def _split_sql(sql: str) -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: create tables and apply FTS migration."""
+    """Startup: create tables and apply migrations."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        migration_path = BASE_DIR.parent / "scripts" / "migration_001_fts.sql"
-        if migration_path.exists():
-            from sqlalchemy import text
-            migration_sql = migration_path.read_text()
-            # Split SQL into individual statements, respecting $$ dollar-quoting.
-            # asyncpg (and SQLAlchemy's asyncpg dialect) can't execute multiple
-            # statements in a single prepared statement.
-            for stmt in _split_sql(migration_sql):
-                await conn.execute(text(stmt))
+        from sqlalchemy import text
+        # Run all migrations in order
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql"]:
+            migration_path = BASE_DIR.parent / "scripts" / migration_file
+            if migration_path.exists():
+                migration_sql = migration_path.read_text()
+                for stmt in _split_sql(migration_sql):
+                    await conn.execute(text(stmt))
     yield
     # Close the SE Chat session if it was opened
     from app.services import se_chat_client
@@ -121,6 +121,7 @@ app.add_middleware(UserMiddleware)
 
 app.include_router(clues_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 app.include_router(transcript_router, prefix="/api")
 
 
@@ -270,22 +271,47 @@ async def clue_by_legacy(request: Request, legacy_number: int):
 
 @app.get("/add", response_class=HTMLResponse)
 async def add_clue_form(request: Request):
-    """Form to add a new clue (room owners only)."""
-    from app.api.clues import _check_write_perm
-
+    """Form to add a new clue (editors and admins only)."""
     user = getattr(request.state, "user", None)
     if not user:
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/api/auth/login?redirect_after=/add", status_code=303)
-    if not user.is_room_owner and not user.is_admin:
+    if not user.is_editor and not user.is_admin:
         return templates.TemplateResponse(
             "error.html",
-            {"request": request, "message": "Room owner privileges required", "user": user},
+            {
+                "request": request,
+                "message": "You don't have permission to edit clues. A diamond moderator may grant you these permissions.",
+                "user": user,
+            },
             status_code=403,
         )
 
     return templates.TemplateResponse(
         "add_clue.html",
+        {"request": request, "user": user},
+    )
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    """Admin page to manage editors (admins only)."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/api/auth/login?redirect_after=/admin", status_code=303)
+    if not user.is_admin:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "Admin privileges required. Only diamond moderators can access this page.",
+                "user": user,
+            },
+            status_code=403,
+        )
+    return templates.TemplateResponse(
+        "admin.html",
         {"request": request, "user": user},
     )
 

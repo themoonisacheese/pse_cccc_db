@@ -101,6 +101,7 @@ class UserOut(BaseModel):
     display_name: str
     profile_link: Optional[str] = None
     is_room_owner: bool
+    is_editor: bool
     is_admin: bool
 
     model_config = {"from_attributes": True}

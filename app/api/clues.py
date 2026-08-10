@@ -40,8 +40,11 @@ def _check_write_perm(request: Request):
     user = getattr(request.state, "user", None)
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required")
-    if not user.is_room_owner and not user.is_admin:
-        raise HTTPException(status_code=403, detail="Room owner privileges required")
+    if not user.is_editor and not user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to edit clues. A diamond moderator may grant you these permissions.",
+        )
     return user
 
 

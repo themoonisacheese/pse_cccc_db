@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Admin — CCCC DB{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>Admin: Manage Editors</h1>
+    <p class="hint">
+        Diamond moderators are always admins and can add/edit clues.
+        Use this page to grant editor privileges to other users so they can add and edit clues too.
+    </p>
+
+    <div class="admin-section">
+        <h2>Current Editors</h2>
+        <table class="clue-table">
+            <thead>
+                <tr>
+                    <th>SE User ID</th>
+                    <th>Display Name</th>
+                    <th>Admin</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="editors-list">
+                <tr><td colspan="4" class="loading">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="admin-section">
+        <h2>Add Editor by SE User ID</h2>
+        <p class="hint">
+            Enter the Puzzling SE user ID. You can find it in the user's profile URL:
+            <code>puzzling.stackexchange.com/users/<strong>93099</strong>/themoonisacheese</code>
+        </p>
+        <div class="add-editor-form">
+            <input type="number" id="se-user-id" placeholder="SE User ID (e.g. 93099)"
+                   class="search-input" style="width: 300px;">
+            <button class="btn" onclick="addEditor()">Grant Editor</button>
+        </div>
+    </div>
+
+    <div class="admin-section">
+        <h2>All Known Users</h2>
+        <p class="hint">Users who have logged in at least once. Click "Grant" or "Revoke" to manage.</p>
+        <table class="clue-table">
+            <thead>
+                <tr>
+                    <th>SE User ID</th>
+                    <th>Display Name</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="all-users-list">
+                <tr><td colspan="4" class="loading">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+async function loadEditors() {
+    const resp = await fetch('/api/admin/editors');
+    if (!resp.ok) { document.getElementById('editors-list').innerHTML = '<tr><td colspan="4">Error loading editors.</td></tr>'; return; }
+    const editors = await resp.json();
+    if (editors.length === 0) {
+        document.getElementById('editors-list').innerHTML = '<tr><td colspan="4">No editors yet.</td></tr>';
+        return;
+    }
+    document.getElementById('editors-list').innerHTML = editors.map(u => `
+        <tr>
+            <td>${u.se_user_id}</td>
+            <td>${u.display_name}</td>
+            <td>${u.is_admin ? '<span class="badge badge-owner">Admin ♦</span>' : '<span class="badge">Editor</span>'}</td>
+            <td>${u.is_admin ? '—' : `<button class="btn btn-small btn-danger" onclick="removeEditor(${u.se_user_id})">Revoke</button>`}</td>
+        </tr>
+    `).join('');
+}
+
+async function loadAllUsers() {
+    const resp = await fetch('/api/admin/users');
+    if (!resp.ok) { document.getElementById('all-users-list').innerHTML = '<tr><td colspan="4">Error loading users.</td></tr>'; return; }
+    const users = await resp.json();
+    if (users.length === 0) {
+        document.getElementById('all-users-list').innerHTML = '<tr><td colspan="4">No users have logged in yet.</td></tr>';
+        return;
+    }
+    document.getElementById('all-users-list').innerHTML = users.map(u => `
+        <tr>
+            <td>${u.se_user_id}</td>
+            <td>${u.display_name}</td>
+            <td>${u.is_admin ? '<span class="badge badge-owner">Admin ♦</span>' : u.is_editor ? '<span class="badge">Editor</span>' : '—'}</td>
+            <td>${u.is_admin ? '—' : u.is_editor ? `<button class="btn btn-small btn-danger" onclick="removeEditor(${u.se_user_id})">Revoke</button>` : `<button class="btn btn-small" onclick="grantEditor(${u.se_user_id})">Grant</button>`}</td>
+        </tr>
+    `).join('');
+}
+
+async function addEditor() {
+    const id = document.getElementById('se-user-id').value;
+    if (!id) return;
+    const resp = await fetch(`/api/admin/editors/${id}`, { method: 'POST' });
+    if (resp.ok) {
+        document.getElementById('se-user-id').value = '';
+        await loadEditors();
+        await loadAllUsers();
+    } else {
+        const err = await resp.json().catch(() => ({ detail: 'Unknown error' }));
+        alert(err.detail || 'Failed to add editor.');
+    }
+}
+
+async function grantEditor(seUserId) {
+    const resp = await fetch(`/api/admin/editors/${seUserId}`, { method: 'POST' });
+    if (resp.ok) { await loadEditors(); await loadAllUsers(); }
+}
+
+async function removeEditor(seUserId) {
+    const resp = await fetch(`/api/admin/editors/${seUserId}`, { method: 'DELETE' });
+    if (resp.ok) { await loadEditors(); await loadAllUsers(); }
+}
+
+loadEditors();
+loadAllUsers();
+</script>
+{% endblock %}
