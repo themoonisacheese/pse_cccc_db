@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # OAuth redirect URI — must match what's registered on StackApps
     se_oauth_redirect: str = "http://localhost:8000/api/auth/callback"
     # SE site to use for user lookups and moderator checks
-    se_site: str = "puzzling"
+    se_site: str = "puzzling.stackexchange.com"
 
     # ── SE Chat Bot Account ────────────────────────────────────
     # Email+password for a bot account used to authenticate with
