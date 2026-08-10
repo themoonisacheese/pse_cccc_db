@@ -199,4 +199,5 @@ pse_cccc_db/
 
 ## License
 
-MIT
+- **Website code**: [GPL v3](LICENSE) — the source code, templates, CSS, and scripts.
+- **Clue content**: [CC-BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) — the clue text, solutions, and explanations are contributed by Puzzling SE users and are not included in the source repository.
