@@ -406,21 +406,6 @@ async def stats_page(request: Request, period: str = "all"):
     async with async_session() as db:
         # ── Overview stats (always all-time) ──
         total = (await db.execute(select(func.count(Clue.id)))).scalar()
-        total_authors = (
-            await db.execute(select(func.count(func.distinct(Clue.author))))
-        ).scalar()
-        total_solvers = (
-            await db.execute(
-                select(func.count(func.distinct(Clue.solver))).where(
-                    Clue.solver.isnot(None)
-                )
-            )
-        ).scalar()
-        unsolved = (
-            await db.execute(
-                select(func.count(Clue.id)).where(Clue.solution.is_(None))
-            )
-        ).scalar()
         distinct_people = (
             await db.execute(
                 select(func.count(func.distinct(Clue.author)))
@@ -430,29 +415,18 @@ async def stats_page(request: Request, period: str = "all"):
         first_date = (await db.execute(select(func.min(Clue.clue_date)))).scalar()
         last_date = (await db.execute(select(func.max(Clue.clue_date)))).scalar()
 
-        # ── Combined leaderboard (filtered by period) ──
-        # Since every author is also a solver, show one table with both counts.
-        auth_cnt = func.count(Clue.id).label("authored")
-        # Subquery for solves per person
-        solve_sub = (
-            select(Clue.solver.label("person"), func.count().label("solved"))
-            .where(Clue.solver.isnot(None))
-            .group_by(Clue.solver)
-        ).subquery()
-        combined_q = (
-            select(
-                Clue.author.label("person"),
-                auth_cnt,
-                func.coalesce(solve_sub.c.solved, 0).label("solved"),
-            )
-            .outerjoin(solve_sub, solve_sub.c.person == Clue.author)
-            .group_by(Clue.author, solve_sub.c.solved)
-            .order_by((auth_cnt + func.coalesce(solve_sub.c.solved, 0)).desc())
+        # ── Leaderboard: authored count only (filtered by period) ──
+        # In the CCCC chain you must solve a clue to author the next one,
+        # so authored ≈ solved for everyone — one column is enough.
+        lb_q = (
+            select(Clue.author.label("person"), func.count(Clue.id).label("cnt"))
+            .group_by(Clue.author)
+            .order_by(func.count(Clue.id).desc())
             .limit(25)
         )
         if date_from is not None:
-            combined_q = combined_q.where(Clue.clue_date >= date_from)
-        leaderboard = (await db.execute(combined_q)).all()
+            lb_q = lb_q.where(Clue.clue_date >= date_from)
+        leaderboard = (await db.execute(lb_q)).all()
 
         # ── Records & curiosities ──
         longest_clue = (
@@ -492,6 +466,32 @@ async def stats_page(request: Request, period: str = "all"):
                 .limit(1)
             )
         ).first()
+
+        # Shortest non-empty solution (empty string is the theoretical minimum
+        # and always wins, so exclude it; show it specially instead).
+        shortest_sol = (
+            await db.execute(
+                select(
+                    Clue.id,
+                    Clue.solution,
+                    func.length(Clue.solution).label("len"),
+                )
+                .where(Clue.solution.isnot(None))
+                .where(func.length(Clue.solution) > 0)
+                .order_by(func.length(Clue.solution).asc())
+                .limit(1)
+            )
+        ).first()
+
+        # Count of empty-string solutions for the special-case display
+        empty_sol_count = (
+            await db.execute(
+                select(func.count(Clue.id)).where(
+                    Clue.solution.isnot(None),
+                    func.length(Clue.solution) == 0,
+                )
+            )
+        ).scalar()
 
         # Most repeated solutions (top 5)
         most_repeated = (
@@ -561,7 +561,6 @@ async def stats_page(request: Request, period: str = "all"):
             "user": user,
             "total_clues": total,
             "total_authors": distinct_people,
-            "unsolved": unsolved,
             "leaderboard": leaderboard,
             "first_date": first_date,
             "last_date": last_date,
@@ -569,6 +568,8 @@ async def stats_page(request: Request, period: str = "all"):
             "longest_clue": longest_clue,
             "shortest_clue": shortest_clue,
             "longest_solution": longest_sol,
+            "shortest_solution": shortest_sol,
+            "empty_sol_count": empty_sol_count,
             "most_repeated": most_repeated,
             "oldest_unsolved": oldest_unsolved,
             "busiest_days": busiest_days,

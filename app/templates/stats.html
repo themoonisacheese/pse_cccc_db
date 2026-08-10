@@ -14,10 +14,6 @@
             <div class="stat-label">Distinct People</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{{ unsolved }}</div>
-            <div class="stat-label">Unsolved</div>
-        </div>
-        <div class="stat-card">
             <div class="stat-value">{{ first_date or '—' }}</div>
             <div class="stat-label">First Clue</div>
         </div>
@@ -61,9 +57,7 @@
                 <tr>
                     <th>#</th>
                     <th>Person</th>
-                    <th>Authored</th>
-                    <th>Solved</th>
-                    <th>Total</th>
+                    <th>Clues Authored</th>
                 </tr>
             </thead>
             <tbody>
@@ -72,8 +66,6 @@
                     <td>{{ loop.index }}</td>
                     <td><a href="/search?author={{ row[0] }}">{{ row[0] }}</a></td>
                     <td>{{ row[1] }}</td>
-                    <td>{{ row[2] }}</td>
-                    <td>{{ row[1] + row[2] }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -128,6 +120,21 @@
                 <div class="record-label">Longest Solution ({{ longest_solution[2] }} chars)</div>
                 <div class="record-value">
                     <a href="/clue/{{ longest_solution[0] }}" class="mono-solution">{{ longest_solution[1] }}</a>
+                </div>
+            </div>
+            {% endif %}
+            {% if empty_sol_count %}
+            <div class="record-card">
+                <div class="record-label">Shortest Solution (0 chars)</div>
+                <div class="record-value">
+                    <span class="mono-solution">(empty string)</span> — used by {{ empty_sol_count }} clue{{ '' if empty_sol_count == 1 else 's' }}
+                </div>
+            </div>
+            {% elif shortest_solution %}
+            <div class="record-card">
+                <div class="record-label">Shortest Solution ({{ shortest_solution[2] }} chars)</div>
+                <div class="record-value">
+                    <a href="/clue/{{ shortest_solution[0] }}" class="mono-solution">{{ shortest_solution[1] }}</a>
                 </div>
             </div>
             {% endif %}
