@@ -399,6 +399,7 @@ async def admin_page(request: Request):
 async def stats_page(request: Request, period: str = "all"):
     """Statistics page."""
     from sqlalchemy import select, func
+    from sqlalchemy.orm import aliased
     from app.models.clue import Clue
     from datetime import date, timedelta
 
@@ -531,6 +532,32 @@ async def stats_page(request: Request, period: str = "all"):
             )
         ).first()
 
+        # Longest time a clue went unsolved (max delta to next clue in chain)
+        # Self-join on legacy_number: the "next" clue is the one that was posted
+        # when someone solved the current one.  delta = next.clue_date - cur.clue_date
+        NextClue = aliased(Clue)
+        longest_unsolved = (
+            await db.execute(
+                select(
+                    Clue.id,
+                    Clue.legacy_number,
+                    Clue.clue_text,
+                    Clue.author,
+                    Clue.clue_date,
+                    NextClue.clue_date.label("next_date"),
+                    (NextClue.clue_date - Clue.clue_date).label("delta"),
+                )
+                .join(
+                    NextClue,
+                    NextClue.legacy_number == Clue.legacy_number + 1,
+                )
+                .where(Clue.clue_date.isnot(None))
+                .where(NextClue.clue_date.isnot(None))
+                .order_by((NextClue.clue_date - Clue.clue_date).desc())
+                .limit(1)
+            )
+        ).first()
+
         # Busiest days (top 5)
         busiest_days = (
             await db.execute(
@@ -583,6 +610,7 @@ async def stats_page(request: Request, period: str = "all"):
             "empty_sol_count": empty_sol_count,
             "most_repeated": most_repeated,
             "oldest_unsolved": oldest_unsolved,
+            "longest_unsolved": longest_unsolved,
             "busiest_days": busiest_days,
             "nemeses": nemeses,
             "per_month": per_month,
