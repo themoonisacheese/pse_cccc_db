@@ -23,6 +23,7 @@ class ClueBase(BaseModel):
     clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None
     clues_by_author_so_far: Optional[int] = None
+    clues_by_solver_so_far: Optional[int] = None
     transcript_link: Optional[str] = None
     legacy_number: Optional[int] = None
 
@@ -43,6 +44,7 @@ class ClueUpdate(BaseModel):
     clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None
     clues_by_author_so_far: Optional[int] = None
+    clues_by_solver_so_far: Optional[int] = None
     transcript_link: Optional[str] = None
     legacy_number: Optional[int] = None
 

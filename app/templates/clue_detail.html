@@ -32,8 +32,8 @@
                 {% if clue.override_solver %}
                 <span class="meta-tag">Override: {{ clue.override_solver }}</span>
                 {% endif %}
-                {% if clues_by_solver_so_far %}
-                <span class="meta-tag">#{{ clues_by_solver_so_far }} by this solver</span>
+                {% if clue.clues_by_solver_so_far %}
+                <span class="meta-tag">#{{ clue.clues_by_solver_so_far }} by this solver</span>
                 {% endif %}
             </div>
             <div class="detail-section">

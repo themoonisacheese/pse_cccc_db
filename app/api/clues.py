@@ -199,6 +199,28 @@ async def create_clue(
         ).scalar()
         clue.legacy_number = (max_num or 0) + 1
 
+    # Auto-compute "Nth clue by this author" and "Nth clue by this solver" pills.
+    # These change almost never (only if a clue is renumbered or author/solver
+    # is corrected), so we store them at write time rather than computing on read.
+    clue.clues_by_author_so_far = (
+        await db.execute(
+            select(func.count(Clue.id)).where(
+                Clue.author == clue.author,
+                Clue.legacy_number <= clue.legacy_number,
+            )
+        )
+    ).scalar()
+
+    if clue.solver:
+        clue.clues_by_solver_so_far = (
+            await db.execute(
+                select(func.count(Clue.id)).where(
+                    Clue.solver == clue.solver,
+                    Clue.legacy_number <= clue.legacy_number,
+                )
+            )
+        ).scalar()
+
     db.add(clue)
     await db.commit()
     await db.refresh(clue)
@@ -233,6 +255,29 @@ async def update_clue(
             )
             db.add(history)
             setattr(clue, field, new_value)
+
+    # Recompute author/solver pills if relevant fields changed
+    if any(f in update_data for f in ("author", "solver", "legacy_number")):
+        clue.clues_by_author_so_far = (
+            await db.execute(
+                select(func.count(Clue.id)).where(
+                    Clue.author == clue.author,
+                    Clue.legacy_number <= clue.legacy_number,
+                )
+            )
+        ).scalar()
+
+        if clue.solver:
+            clue.clues_by_solver_so_far = (
+                await db.execute(
+                    select(func.count(Clue.id)).where(
+                        Clue.solver == clue.solver,
+                        Clue.legacy_number <= clue.legacy_number,
+                    )
+                )
+            ).scalar()
+        else:
+            clue.clues_by_solver_so_far = None
 
     await db.commit()
     await db.refresh(clue)

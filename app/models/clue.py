@@ -75,6 +75,7 @@ class Clue(Base):
     clue_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     number_on_date: Mapped[int | None] = mapped_column(Integer, nullable=True)
     clues_by_author_so_far: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    clues_by_solver_so_far: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     transcript_link: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
 
