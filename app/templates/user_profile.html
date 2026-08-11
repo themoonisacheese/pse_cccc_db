@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}{{ profile_name }} — CCCC DB{% endblock %}
+{% block content %}
+<div class="profile-page">
+    <div class="profile-header">
+        <h1>{{ profile_name }}</h1>
+        {% if user and user.display_name == profile_name %}
+        <span class="its-you-pill">you!</span>
+        {% endif %}
+        {% if first_date %}
+        <span class="profile-tenure">
+            Active {{ first_date | rel_date }} → {{ last_date | rel_date }}
+        </span>
+        {% endif %}
+    </div>
+
+    {# ── Stat cards ── #}
+    <div class="stat-cards">
+        <div class="stat-card">
+            <div class="stat-value">{{ "{:,}".format(authored) }}</div>
+            <div class="stat-label">Clues Authored</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ "{:,}".format(solved) }}</div>
+            <div class="stat-label">Clues Solved</div>
+        </div>
+        {% if rank %}
+        <div class="stat-card">
+            <div class="stat-value">#{{ rank }}</div>
+            <div class="stat-label">Leaderboard Rank</div>
+        </div>
+        {% endif %}
+        {% if edit_count %}
+        <div class="stat-card">
+            <div class="stat-value">{{ edit_count }}</div>
+            <div class="stat-label">Edits Made</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ── Streaks ── #}
+    <div class="stats-section">
+        <h2>Streaks</h2>
+        <div class="stat-cards">
+            <div class="stat-card">
+                <div class="stat-value">{{ author_streak }}</div>
+                <div class="stat-label">Max Author Streak
+                    <small>(current: {{ author_current }})</small></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ solver_streak }}</div>
+                <div class="stat-label">Max Solver Streak
+                    <small>(current: {{ solver_current }})</small></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ max_day_streak }}</div>
+                <div class="stat-label">Max Consecutive Active Days
+                    <small>(current: {{ current_day_streak }})</small></div>
+            </div>
+        </div>
+        <p class="stats-desc">
+            Author/solver streaks count clues at positions n, n+2, n+4… (you can't
+            appear in two consecutive clues — someone else must post between yours).
+        </p>
+    </div>
+
+    {# ── Bidirectional Nemeses ── #}
+    <div class="stats-section">
+        <h2>Nemeses</h2>
+        <div class="nemesis-grid">
+            {% if solved_most %}
+            <div class="nemesis-panel">
+                <h3>You solve their clues</h3>
+                <table class="clue-table">
+                    <thead><tr><th>#</th><th>Author</th><th>Solves</th></tr></thead>
+                    <tbody>
+                        {% for row in solved_most %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><a href="/user/{{ row[0] }}">{{ row[0] }}</a></td>
+                            <td>{{ row[1] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% if solves_you %}
+            <div class="nemesis-panel">
+                <h3>They solve your clues</h3>
+                <table class="clue-table">
+                    <thead><tr><th>#</th><th>Solver</th><th>Solves</th></tr></thead>
+                    <tbody>
+                        {% for row in solves_you %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><a href="/user/{{ row[0] }}">{{ row[0] }}</a></td>
+                            <td>{{ row[1] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Claim to Fame: fastest-solved clue ── #}
+    {% if fastest_solved %}
+    <div class="stats-section">
+        <h2>Claim to Fame</h2>
+        <div class="record-card">
+            <div class="record-label">Fastest-Solved Clue ({{ fastest_solved[5] }} days)</div>
+            <div class="record-value">
+                <a href="/clue/{{ fastest_solved[0] }}">#{{ fastest_solved[1] or fastest_solved[0] }}</a> —
+                {{ fastest_solved[2][:120] }}{% if fastest_solved[2]|length > 120 %}…{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Clue length distribution ── #}
+    {% if length_stats and length_stats[0] %}
+    <div class="stats-section">
+        <h2>Clue Length</h2>
+        <div class="stat-cards">
+            <div class="stat-card">
+                <div class="stat-value">{{ length_stats[0] }}</div>
+                <div class="stat-label">Average Length (chars)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ length_stats[1] }}</div>
+                <div class="stat-label">Shortest</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ length_stats[2] }}</div>
+                <div class="stat-label">Longest</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Recent activity ── #}
+    {% if recent %}
+    <div class="stats-section">
+        <h2>Recent Activity</h2>
+        <table class="clue-table">
+            <thead>
+                <tr><th>#</th><th>Clue</th><th>Role</th><th>Other Person</th><th>Date</th></tr>
+            </thead>
+            <tbody>
+                {% for clue in recent %}
+                <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}'">
+                    <td class="clue-num">{{ clue.legacy_number }}</td>
+                    <td class="clue-text">{{ clue.clue_text[:100] }}{% if clue.clue_text|length > 100 %}…{% endif %}</td>
+                    <td>
+                        {% if clue.author == profile_name %}Author{% else %}Solver{% endif %}
+                    </td>
+                    <td>
+                        {% if clue.author == profile_name %}
+                            <a href="/user/{{ clue.solver }}">{{ clue.solver or '—' }}</a>
+                        {% else %}
+                            <a href="/user/{{ clue.author }}">{{ clue.author }}</a>
+                        {% endif %}
+                    </td>
+                    <td title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# ── Links ── #}
+    <div class="clue-detail-footer">
+        <a href="/search?author={{ profile_name }}" class="btn btn-small btn-outline">All authored clues</a>
+        <a href="/search?solver={{ profile_name }}" class="btn btn-small btn-outline">All solved clues</a>
+    </div>
+</div>
+{% endblock %}

@@ -28,7 +28,7 @@
                     <a href="/admin" class="btn btn-small btn-outline">Admin</a>
                 {% endif %}
                 <span class="user-badge" title="{{ user.display_name }}">
-                    {{ user.display_name }}
+                    <a href="/user/{{ user.display_name }}">{{ user.display_name }}</a>
                 </span>
                 {% if user.is_admin %}
                     <span class="badge badge-owner">Admin ♦</span>

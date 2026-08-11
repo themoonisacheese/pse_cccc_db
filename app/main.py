@@ -624,3 +624,242 @@ async def stats_page(request: Request, period: str = "all"):
             "max_monthly": max_monthly,
         },
     )
+
+
+# ── Helper: compute max & current streak from sorted legacy numbers ──
+
+def _streak_from_numbers(numbers: list[int]) -> tuple[int, int]:
+    """Given legacy numbers (sorted ascending), compute (max_streak, current_streak).
+
+    In the CCCC chain you can't author/solve two consecutive clues
+    (someone else must post between yours), so a streak = same person
+    appearing at positions n, n+2, n+4, …  Gap of exactly 2 continues
+    the streak; any other gap breaks it.
+    """
+    if not numbers:
+        return 0, 0
+    numbers = sorted(set(numbers))
+    max_streak = 1
+    current = 1
+    for i in range(1, len(numbers)):
+        if numbers[i] - numbers[i - 1] == 2:
+            current += 1
+            max_streak = max(max_streak, current)
+        else:
+            current = 1
+    # current streak = streak ending at the user's most recent entry
+    current = 1
+    for i in range(len(numbers) - 1, 0, -1):
+        if numbers[i] - numbers[i - 1] == 2:
+            current += 1
+        else:
+            break
+    return max_streak, current
+
+
+# ── Helper: consecutive-day streak from sorted dates ──
+
+def _day_streak(dates: list) -> tuple[int, int]:
+    """Given a list of date objects (sorted), return (max_consecutive_days, current_streak)."""
+    from datetime import date as date_cls, timedelta
+    if not dates:
+        return 0, 0
+    unique = sorted(set(dates))
+    max_streak = 1
+    current = 1
+    for i in range(1, len(unique)):
+        if (unique[i] - unique[i - 1]) == timedelta(days=1):
+            current += 1
+            max_streak = max(max_streak, current)
+        else:
+            current = 1
+    # current streak: count backward from today
+    today = date_cls.today()
+    current = 0
+    for i in range(len(unique) - 1, -1, -1):
+        if (today - unique[i]).days == current:
+            current += 1
+        elif (today - unique[i]).days > current:
+            break
+    return max_streak, current
+
+
+@app.get("/user/{username}", response_class=HTMLResponse)
+async def user_profile(request: Request, username: str):
+    """User profile page: per-person stats, nemeses, streaks, history."""
+    from sqlalchemy import select, func, or_
+    from sqlalchemy.orm import aliased
+    from app.models.clue import Clue, ClueEditHistory, User
+
+    user = getattr(request.state, "user", None)
+    NextClue = aliased(Clue)
+
+    async with async_session() as db:
+        # ── Basic counts ──
+        authored = (await db.execute(
+            select(func.count(Clue.id)).where(Clue.author == username)
+        )).scalar() or 0
+
+        solved = (await db.execute(
+            select(func.count(Clue.id)).where(Clue.solver == username)
+        )).scalar() or 0
+
+        if authored == 0 and solved == 0:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": f"No clues found for user '{username}'.", "user": user},
+                status_code=404,
+            )
+
+        # ── First / last activity ──
+        first_date = (await db.execute(
+            select(func.min(Clue.clue_date)).where(
+                or_(Clue.author == username, Clue.solver == username)
+            )
+        )).scalar()
+        last_date = (await db.execute(
+            select(func.max(Clue.clue_date)).where(
+                or_(Clue.author == username, Clue.solver == username)
+            )
+        )).scalar()
+
+        # ── Leaderboard rank (by authored count) ──
+        all_ranks = (await db.execute(
+            select(Clue.author, func.count().label("cnt"))
+            .group_by(Clue.author)
+            .order_by(func.count().desc())
+        )).all()
+        rank = None
+        total_authors = len(all_ranks)
+        for i, (author, _) in enumerate(all_ranks, 1):
+            if author == username:
+                rank = i
+                break
+
+        # ── Edit count (if we can match a User record) ──
+        edit_count = 0
+        user_record = (await db.execute(
+            select(User).where(User.display_name == username)
+        )).first()
+        if user_record:
+            edit_count = (await db.execute(
+                select(func.count(ClueEditHistory.id)).where(
+                    ClueEditHistory.edited_by_user_id == user_record[0].id
+                )
+            )).scalar() or 0
+
+        # ── Bidirectional nemeses ──
+        # People this user solves the most
+        solved_most = (await db.execute(
+            select(Clue.author, func.count().label("cnt"))
+            .where(Clue.solver == username)
+            .group_by(Clue.author)
+            .order_by(func.count().desc())
+            .limit(5)
+        )).all()
+
+        # People who solve this user the most
+        solves_you = (await db.execute(
+            select(Clue.solver, func.count().label("cnt"))
+            .where(Clue.author == username, Clue.solver.isnot(None))
+            .group_by(Clue.solver)
+            .order_by(func.count().desc())
+            .limit(5)
+        )).all()
+
+        # ── Author streak (gap of 2 in legacy numbers) ──
+        author_nums = [r[0] for r in (await db.execute(
+            select(Clue.legacy_number)
+            .where(Clue.author == username, Clue.legacy_number.isnot(None))
+            .order_by(Clue.legacy_number)
+        )).all()]
+        author_streak, author_current = _streak_from_numbers(author_nums)
+
+        # ── Solver streak ──
+        solver_nums = [r[0] for r in (await db.execute(
+            select(Clue.legacy_number)
+            .where(Clue.solver == username, Clue.legacy_number.isnot(None))
+            .order_by(Clue.legacy_number)
+        )).all()]
+        solver_streak, solver_current = _streak_from_numbers(solver_nums)
+
+        # ── Consecutive active days ──
+        active_dates = [r[0] for r in (await db.execute(
+            select(Clue.clue_date)
+            .where(
+                or_(Clue.author == username, Clue.solver == username),
+                Clue.clue_date.isnot(None),
+            )
+            .order_by(Clue.clue_date)
+        )).all()]
+        max_day_streak, current_day_streak = _day_streak(active_dates)
+
+        # ── Claim to fame: fastest-solved clue ──
+        fastest_solved = (await db.execute(
+            select(
+                Clue.id,
+                Clue.legacy_number,
+                Clue.clue_text,
+                Clue.clue_date,
+                NextClue.clue_date.label("next_date"),
+                (NextClue.clue_date - Clue.clue_date).label("delta"),
+            )
+            .join(NextClue, NextClue.legacy_number == Clue.legacy_number + 1)
+            .where(Clue.author == username, Clue.clue_date.isnot(None), NextClue.clue_date.isnot(None))
+            .order_by((NextClue.clue_date - Clue.clue_date).asc())
+            .limit(1)
+        )).first()
+
+        # ── Clue length stats (authored clues) ──
+        length_stats = (await db.execute(
+            select(
+                func.round(func.avg(Clue.clue_length), 1).label("avg"),
+                func.min(Clue.clue_length).label("min"),
+                func.max(Clue.clue_length).label("max"),
+            ).where(Clue.author == username)
+        )).first()
+
+        # ── Recent activity (last 15 clues authored or solved) ──
+        recent = (await db.execute(
+            select(Clue)
+            .where(or_(Clue.author == username, Clue.solver == username))
+            .order_by(Clue.legacy_number.desc())
+            .limit(15)
+        )).scalars().all()
+
+    return templates.TemplateResponse(
+        "user_profile.html",
+        {
+            "request": request,
+            "user": user,
+            "profile_name": username,
+            "authored": authored,
+            "solved": solved,
+            "first_date": first_date,
+            "last_date": last_date,
+            "rank": rank,
+            "total_authors": total_authors,
+            "edit_count": edit_count,
+            "solved_most": solved_most,
+            "solves_you": solves_you,
+            "author_streak": author_streak,
+            "author_current": author_current,
+            "solver_streak": solver_streak,
+            "solver_current": solver_current,
+            "max_day_streak": max_day_streak,
+            "current_day_streak": current_day_streak,
+            "fastest_solved": fastest_solved,
+            "length_stats": length_stats,
+            "recent": recent,
+        },
+    )
+
+
+@app.get("/me", response_class=HTMLResponse)
+async def my_profile(request: Request):
+    """Redirect to the logged-in user's profile."""
+    from fastapi.responses import RedirectResponse
+    user = getattr(request.state, "user", None)
+    if not user:
+        return RedirectResponse(url="/api/auth/login?redirect_after=/me", status_code=303)
+    return RedirectResponse(url=f"/user/{user.display_name}", status_code=301)

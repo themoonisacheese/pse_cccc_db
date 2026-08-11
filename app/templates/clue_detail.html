@@ -21,7 +21,7 @@
         <div class="detail-grid">
             <div class="detail-section">
                 <h3>Author</h3>
-                <p>{{ clue.author }}{% if user and user.display_name == clue.author %}<span class="its-you-pill">you!</span>{% endif %}</p>
+                <p><a href="/user/{{ clue.author }}">{{ clue.author }}</a>{% if user and user.display_name == clue.author %}<span class="its-you-pill">you!</span>{% endif %}</p>
                 {% if clue.clues_by_author_so_far %}
                 {% set author_n = clue.clues_by_author_so_far %}
                 <span class="meta-tag {% if author_n == 1 %}pill-bronze{% elif author_n == 50 %}pill-silver{% endif %}">#{{ author_n }} by this author</span>
@@ -29,7 +29,7 @@
             </div>
             <div class="detail-section">
                 <h3>Solver</h3>
-                <p>{{ clue.solver or '—' }}{% if user and clue.solver and user.display_name == clue.solver %}<span class="its-you-pill">you!</span>{% endif %}</p>
+                <p>{% if clue.solver %}<a href="/user/{{ clue.solver }}">{{ clue.solver }}</a>{% else %}—{% endif %}{% if user and clue.solver and user.display_name == clue.solver %}<span class="its-you-pill">you!</span>{% endif %}</p>
                 {% if clue.override_solver %}
                 <span class="meta-tag">Override: {{ clue.override_solver }}</span>
                 {% endif %}
@@ -75,9 +75,9 @@
         {% if user and (user.is_editor or user.is_admin) %}
         <a href="/clue/{{ clue.id }}/edit" class="btn btn-small">Edit</a>
         {% endif %}
-        <a href="/search?author={{ clue.author }}" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
+        <a href="/user/{{ clue.author }}" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
         {% if clue.solver %}
-        <a href="/search?solver={{ clue.solver }}" class="btn btn-small btn-outline">More solved by {{ clue.solver }}</a>
+        <a href="/user/{{ clue.solver }}" class="btn btn-small btn-outline">More solved by {{ clue.solver }}</a>
         {% endif %}
     </div>
 </div>
