@@ -794,29 +794,26 @@ async def user_profile(request: Request, username: str):
         )).all()]
         max_day_streak, current_day_streak = _day_streak(active_dates)
 
-        # ── Claim to fame: fastest-solved clue ──
-        fastest_solved = (await db.execute(
+        # ── Longest unsolved authored clue (earliest authored, still unsolved) ──
+        longest_unsolved = (await db.execute(
             select(
                 Clue.id,
                 Clue.legacy_number,
                 Clue.clue_text,
                 Clue.clue_date,
-                NextClue.clue_date.label("next_date"),
-                (NextClue.clue_date - Clue.clue_date).label("delta"),
             )
-            .join(NextClue, NextClue.legacy_number == Clue.legacy_number + 1)
-            .where(Clue.author == username, Clue.clue_date.isnot(None), NextClue.clue_date.isnot(None))
-            .order_by((NextClue.clue_date - Clue.clue_date).asc())
+            .where(Clue.author == username, Clue.solver.is_(None))
+            .order_by(Clue.clue_date.asc())
             .limit(1)
         )).first()
 
-        # ── Clue length stats (authored clues) ──
-        length_stats = (await db.execute(
+        # ── Solution length stats (authored clues) ──
+        solution_length_stats = (await db.execute(
             select(
-                func.round(func.avg(Clue.clue_length), 1).label("avg"),
-                func.min(Clue.clue_length).label("min"),
-                func.max(Clue.clue_length).label("max"),
-            ).where(Clue.author == username)
+                func.round(func.avg(Clue.answer_length), 1).label("avg"),
+                func.min(Clue.answer_length).label("min"),
+                func.max(Clue.answer_length).label("max"),
+            ).where(Clue.author == username, Clue.answer_length.isnot(None))
         )).first()
 
         # ── Recent activity (last 15 clues authored or solved) ──
@@ -848,8 +845,8 @@ async def user_profile(request: Request, username: str):
             "solver_current": solver_current,
             "max_day_streak": max_day_streak,
             "current_day_streak": current_day_streak,
-            "fastest_solved": fastest_solved,
-            "length_stats": length_stats,
+            "longest_unsolved": longest_unsolved,
+            "solution_length_stats": solution_length_stats,
             "recent": recent,
         },
     )

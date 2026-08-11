@@ -18,11 +18,7 @@
     <div class="stat-cards">
         <div class="stat-card">
             <div class="stat-value">{{ "{:,}".format(authored) }}</div>
-            <div class="stat-label">Clues Authored</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ "{:,}".format(solved) }}</div>
-            <div class="stat-label">Clues Solved</div>
+            <div class="stat-label">Clues Authored & Solved</div>
         </div>
         {% if rank %}
         <div class="stat-card">
@@ -44,17 +40,17 @@
         <div class="stat-cards">
             <div class="stat-card">
                 <div class="stat-value">{{ author_streak }}</div>
-                <div class="stat-label">Max Author Streak
+                <div class="stat-label">Author Streak
                     <small>(current: {{ author_current }})</small></div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ solver_streak }}</div>
-                <div class="stat-label">Max Solver Streak
+                <div class="stat-label">Solver Streak
                     <small>(current: {{ solver_current }})</small></div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ max_day_streak }}</div>
-                <div class="stat-label">Max Consecutive Active Days
+                <div class="stat-label">Active Day Streak
                     <small>(current: {{ current_day_streak }})</small></div>
             </div>
         </div>
@@ -105,35 +101,38 @@
         </div>
     </div>
 
-    {# ── Claim to Fame: fastest-solved clue ── #}
-    {% if fastest_solved %}
+    {# ── Longest unsolved authored clue ── #}
+    {% if longest_unsolved %}
     <div class="stats-section">
-        <h2>Claim to Fame</h2>
+        <h2>Longest Unsolved</h2>
         <div class="record-card">
-            <div class="record-label">Fastest-Solved Clue ({{ fastest_solved[5] }} days)</div>
+            <div class="record-label">Oldest authored clue still awaiting a solver</div>
             <div class="record-value">
-                <a href="/clue/{{ fastest_solved[0] }}">#{{ fastest_solved[1] or fastest_solved[0] }}</a> —
-                {{ fastest_solved[2][:120] }}{% if fastest_solved[2]|length > 120 %}…{% endif %}
+                <a href="/clue/{{ longest_unsolved[0] }}">#{{ longest_unsolved[1] or longest_unsolved[0] }}</a> —
+                {{ longest_unsolved[2][:120] }}{% if longest_unsolved[2]|length > 120 %}…{% endif %}
+                {% if longest_unsolved[3] %}
+                <small style="margin-left:0.5em">posted {{ longest_unsolved[3] | rel_date }}</small>
+                {% endif %}
             </div>
         </div>
     </div>
     {% endif %}
 
-    {# ── Clue length distribution ── #}
-    {% if length_stats and length_stats[0] %}
+    {# ── Solution length stats (authored clues) ── #}
+    {% if solution_length_stats and solution_length_stats[0] %}
     <div class="stats-section">
-        <h2>Clue Length</h2>
+        <h2>Solution Length</h2>
         <div class="stat-cards">
             <div class="stat-card">
-                <div class="stat-value">{{ length_stats[0] }}</div>
-                <div class="stat-label">Average Length (chars)</div>
+                <div class="stat-value">{{ solution_length_stats[0] }}</div>
+                <div class="stat-label">Avg Answer Length (letters)</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ length_stats[1] }}</div>
+                <div class="stat-value">{{ solution_length_stats[1] }}</div>
                 <div class="stat-label">Shortest</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ length_stats[2] }}</div>
+                <div class="stat-value">{{ solution_length_stats[2] }}</div>
                 <div class="stat-label">Longest</div>
             </div>
         </div>
