@@ -767,21 +767,13 @@ async def user_profile(request: Request, username: str):
             .limit(5)
         )).all()
 
-        # ── Author streak (gap of 2 in legacy numbers) ──
-        author_nums = [r[0] for r in (await db.execute(
+        # ── Streak (gap of 2 in legacy numbers — can't be in 2 consecutive clues) ──
+        streak_nums = [r[0] for r in (await db.execute(
             select(Clue.legacy_number)
             .where(Clue.author == username, Clue.legacy_number.isnot(None))
             .order_by(Clue.legacy_number)
         )).all()]
-        author_streak, author_current = _streak_from_numbers(author_nums)
-
-        # ── Solver streak ──
-        solver_nums = [r[0] for r in (await db.execute(
-            select(Clue.legacy_number)
-            .where(Clue.solver == username, Clue.legacy_number.isnot(None))
-            .order_by(Clue.legacy_number)
-        )).all()]
-        solver_streak, solver_current = _streak_from_numbers(solver_nums)
+        max_streak, current_streak = _streak_from_numbers(streak_nums)
 
         # ── Consecutive active days ──
         active_dates = [r[0] for r in (await db.execute(
@@ -839,10 +831,8 @@ async def user_profile(request: Request, username: str):
             "edit_count": edit_count,
             "solved_most": solved_most,
             "solves_you": solves_you,
-            "author_streak": author_streak,
-            "author_current": author_current,
-            "solver_streak": solver_streak,
-            "solver_current": solver_current,
+            "max_streak": max_streak,
+            "current_streak": current_streak,
             "max_day_streak": max_day_streak,
             "current_day_streak": current_day_streak,
             "longest_unsolved": longest_unsolved,

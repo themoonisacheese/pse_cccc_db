@@ -39,23 +39,21 @@
         <h2>Streaks</h2>
         <div class="stat-cards">
             <div class="stat-card">
-                <div class="stat-value">{{ author_streak }}</div>
-                <div class="stat-label">Author Streak
-                    <small>(current: {{ author_current }})</small></div>
+                <div class="stat-value">{{ max_streak }}</div>
+                <div class="stat-label">Biggest Streak</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ solver_streak }}</div>
-                <div class="stat-label">Solver Streak
-                    <small>(current: {{ solver_current }})</small></div>
+                <div class="stat-value">{{ current_streak }}</div>
+                <div class="stat-label">Current Streak</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ max_day_streak }}</div>
-                <div class="stat-label">Active Day Streak
+                <div class="stat-label">Biggest Day Streak
                     <small>(current: {{ current_day_streak }})</small></div>
             </div>
         </div>
         <p class="stats-desc">
-            Author/solver streaks count clues at positions n, n+2, n+4… (you can't
+            Clue streaks count clues at positions n, n+2, n+4… (you can't
             appear in two consecutive clues — someone else must post between yours).
         </p>
     </div>
