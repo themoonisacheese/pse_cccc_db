@@ -22,6 +22,8 @@
         <div id="import-result"></div>
     </div>
 
+    <p class="form-hint">Fields marked <span class="required">*</span> are required. Leave any other field blank if unknown.</p>
+
     <form class="clue-form" id="clue-form">
         <div class="form-grid">
             <div class="form-field">
@@ -81,8 +83,12 @@ document.getElementById('clue-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
     const data = Object.fromEntries(new FormData(form).entries());
-    // Remove empty legacy_number so backend auto-assigns
-    if (!data.legacy_number) delete data.legacy_number;
+    // Convert empty strings to null for optional fields
+    for (const [k, v] of Object.entries(data)) {
+        if (v === '') data[k] = null;
+    }
+    // Remove legacy_number if null so backend auto-assigns
+    if (data.legacy_number === null) delete data.legacy_number;
     const resp = await fetch('/api/clues', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},

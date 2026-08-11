@@ -4,6 +4,8 @@
 <div class="add-clue-page">
     <h1>Edit Clue #{{ clue.legacy_number }}</h1>
 
+    <p class="form-hint">Fields marked <span class="required">*</span> are required. Leave any other field blank to clear it (set to NULL).</p>
+
     <form id="clue-form" class="clue-form">
         <div class="form-grid">
             <div class="form-field">
@@ -58,12 +60,13 @@ document.getElementById('clue-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
     const data = Object.fromEntries(new FormData(form).entries());
-    // Remove empty strings so ClueUpdate exclude_unset works properly
+    // Convert empty strings to null so the backend sets the field to NULL
+    // (ClueUpdate uses exclude_unset=True, so we must send null, not omit the key)
     for (const [k, v] of Object.entries(data)) {
-        if (v === '') delete data[k];
+        if (v === '') data[k] = null;
     }
     // legacy_number must be int if present
-    if (data.legacy_number) data.legacy_number = parseInt(data.legacy_number);
+    if (data.legacy_number !== null) data.legacy_number = parseInt(data.legacy_number);
 
     const resp = await fetch('/api/clues/{{ clue.id }}', {
         method: 'PUT',
