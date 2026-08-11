@@ -794,16 +794,29 @@ async def user_profile(request: Request, username: str):
         )).all()]
         max_day_streak, current_day_streak = _day_streak(active_dates)
 
-        # ── Longest unsolved authored clue (earliest authored, still unsolved) ──
+        # ── Longest unsolved authored clue (max time from posting to being
+        #    solved by the next clue in the chain) ──
+        from sqlalchemy.orm import aliased as _aliased
+        NextClue = _aliased(Clue)
         longest_unsolved = (await db.execute(
             select(
                 Clue.id,
                 Clue.legacy_number,
                 Clue.clue_text,
                 Clue.clue_date,
+                NextClue.clue_date.label("next_date"),
+                (NextClue.clue_date - Clue.clue_date).label("delta"),
             )
-            .where(Clue.author == username, Clue.solver.is_(None))
-            .order_by(Clue.clue_date.asc())
+            .join(
+                NextClue,
+                NextClue.legacy_number == Clue.legacy_number + 1,
+            )
+            .where(
+                Clue.author == username,
+                Clue.clue_date.isnot(None),
+                NextClue.clue_date.isnot(None),
+            )
+            .order_by((NextClue.clue_date - Clue.clue_date).desc())
             .limit(1)
         )).first()
 

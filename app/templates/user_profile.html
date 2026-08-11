@@ -95,17 +95,20 @@
         </div>
     </div>
 
-    {# ── Longest unsolved authored clue ── #}
+    {# ── Longest unsolved authored clue (max time to be solved) ── #}
     {% if longest_unsolved %}
     <div class="stats-section">
         <h2>Longest Unsolved</h2>
         <div class="record-card">
-            <div class="record-label">Oldest authored clue still awaiting a solver</div>
+            <div class="record-label">Longest time from posting to being solved ({{ (longest_unsolved[5].days if longest_unsolved[5] else None) }} days)</div>
             <div class="record-value">
                 <a href="/clue/{{ longest_unsolved[0] }}">#{{ longest_unsolved[1] or longest_unsolved[0] }}</a> —
                 {{ longest_unsolved[2][:120] }}{% if longest_unsolved[2]|length > 120 %}…{% endif %}
                 {% if longest_unsolved[3] %}
                 <small style="margin-left:0.5em">posted {{ longest_unsolved[3] | rel_date }}</small>
+                {% endif %}
+                {% if longest_unsolved[4] %}
+                <small style="margin-left:0.5em">solved {{ longest_unsolved[4] | rel_date }}</small>
                 {% endif %}
             </div>
         </div>
