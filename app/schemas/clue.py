@@ -79,12 +79,12 @@ class ClueSearch(BaseModel):
     author: Optional[str] = None
     solver: Optional[str] = None
     solution: Optional[str] = None  # exact/ILIKE solution search
-    date_from: Optional[date_type] = None
-    date_to: Optional[date_type] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
     legacy_number: Optional[int] = None
     transcript_link: Optional[str] = None
     order_by: str = "legacy_number"
-    order_dir: str = "asc"
+    order_dir: str = "desc"
     page: int = 1
     page_size: int = 50
 

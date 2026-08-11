@@ -192,14 +192,20 @@ async def search_page(
     author: str = "",
     solver: str = "",
     solution: str = "",
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
+    date_from: str = "",
+    date_to: str = "",
+    sort: str = "desc",
     page: int = 1,
     page_size: int = 50,
 ):
     """Search page with HTMX-powered live results."""
     from sqlalchemy import select, func
     from app.models.clue import Clue
+    from datetime import date as date_cls
+
+    # Parse date strings (empty string = None)
+    from_dt = date_cls.fromisoformat(date_from) if date_from else None
+    to_dt = date_cls.fromisoformat(date_to) if date_to else None
 
     user = getattr(request.state, "user", None)
     async with async_session() as db:
@@ -226,15 +232,16 @@ async def search_page(
             else:
                 query = query.where(Clue.solution.ilike(f"%{solution}%"))
                 count_query = count_query.where(Clue.solution.ilike(f"%{solution}%"))
-        if date_from:
-            query = query.where(Clue.clue_date >= date_from)
-            count_query = count_query.where(Clue.clue_date >= date_from)
-        if date_to:
-            query = query.where(Clue.clue_date <= date_to)
-            count_query = count_query.where(Clue.clue_date <= date_to)
+        if from_dt:
+            query = query.where(Clue.clue_date >= from_dt)
+            count_query = count_query.where(Clue.clue_date >= from_dt)
+        if to_dt:
+            query = query.where(Clue.clue_date <= to_dt)
+            count_query = count_query.where(Clue.clue_date <= to_dt)
 
         offset = (page - 1) * page_size
-        query = query.order_by(Clue.legacy_number).offset(offset).limit(page_size)
+        order_col = Clue.legacy_number.desc() if sort == "desc" else Clue.legacy_number
+        query = query.order_by(order_col).offset(offset).limit(page_size)
 
         result = await db.execute(query)
         clues = result.scalars().all()
@@ -253,8 +260,9 @@ async def search_page(
             "author": author,
             "solver": solver,
             "solution": solution,
-            "date_from": date_from.isoformat() if date_from else "",
-            "date_to": date_to.isoformat() if date_to else "",
+            "date_from": date_from,
+            "date_to": date_to,
+            "sort": sort,
             "page": page,
             "page_size": page_size,
             "total": total,

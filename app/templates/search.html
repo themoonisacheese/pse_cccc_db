@@ -44,6 +44,14 @@
                        hx-get="/search" hx-target="#results" hx-trigger="change"
                        hx-include="#search-form" autocomplete="off">
             </div>
+            <div class="filter-field">
+                <label>Sort</label>
+                <select name="sort" hx-get="/search" hx-target="#results" hx-trigger="change"
+                        hx-include="#search-form">
+                    <option value="desc" {{ 'selected' if sort == 'desc' else '' }}>Newest first</option>
+                    <option value="asc" {{ 'selected' if sort == 'asc' else '' }}>Oldest first</option>
+                </select>
+            </div>
         </div>
     </form>
 

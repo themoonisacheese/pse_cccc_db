@@ -58,12 +58,12 @@ async def list_clues(
     author: Optional[str] = Query(None, description="Filter by author (ILIKE)"),
     solver: Optional[str] = Query(None, description="Filter by solver (ILIKE)"),
     solution: Optional[str] = Query(None, description="Filter by solution (ILIKE)"),
-    date_from: Optional[date] = Query(None, description="Clues on or after this date"),
-    date_to: Optional[date] = Query(None, description="Clues on or before this date"),
+    date_from: Optional[str] = Query(None, description="Clues on or after this date (ISO format)"),
+    date_to: Optional[str] = Query(None, description="Clues on or before this date (ISO format)"),
     legacy_number: Optional[int] = Query(None, description="Exact legacy number"),
     transcript_link: Optional[str] = Query(None, description="Exact transcript link"),
     order_by: str = Query("legacy_number", description="Sort column"),
-    order_dir: str = Query("asc", pattern="^(asc|desc)$"),
+    order_dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -100,13 +100,16 @@ async def list_clues(
             query = query.where(Clue.solution.ilike(f"%{solution}%"))
             count_query = count_query.where(Clue.solution.ilike(f"%{solution}%"))
 
-    # Date range
-    if date_from:
-        query = query.where(Clue.clue_date >= date_from)
-        count_query = count_query.where(Clue.clue_date >= date_from)
-    if date_to:
-        query = query.where(Clue.clue_date <= date_to)
-        count_query = count_query.where(Clue.clue_date <= date_to)
+    # Date range (parse ISO strings; empty/invalid = skip)
+    from datetime import date as date_cls
+    from_dt = date_cls.fromisoformat(date_from) if date_from else None
+    to_dt = date_cls.fromisoformat(date_to) if date_to else None
+    if from_dt:
+        query = query.where(Clue.clue_date >= from_dt)
+        count_query = count_query.where(Clue.clue_date >= from_dt)
+    if to_dt:
+        query = query.where(Clue.clue_date <= to_dt)
+        count_query = count_query.where(Clue.clue_date <= to_dt)
 
     # Exact matches
     if legacy_number:

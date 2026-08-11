@@ -37,12 +37,12 @@
 {% if total_pages > 1 %}
 <div class="pagination">
     {% if page > 1 %}
-    <a href="/search?q={{ q }}&author={{ author }}&solver={{ solver }}&solution={{ solution }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page - 1 }}"
+    <a href="/search?q={{ q }}&author={{ author }}&solver={{ solver }}&solution={{ solution }}&date_from={{ date_from }}&date_to={{ date_to }}&sort={{ sort }}&page={{ page - 1 }}"
        class="btn btn-small">← Prev</a>
     {% endif %}
     <span>Page {{ page }} of {{ total_pages }}</span>
     {% if page < total_pages %}
-    <a href="/search?q={{ q }}&author={{ author }}&solver={{ solver }}&solution={{ solution }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page + 1 }}"
+    <a href="/search?q={{ q }}&author={{ author }}&solver={{ solver }}&solution={{ solution }}&date_from={{ date_from }}&date_to={{ date_to }}&sort={{ sort }}&page={{ page + 1 }}"
        class="btn btn-small">Next →</a>
     {% endif %}
 </div>
