@@ -21,8 +21,8 @@
         <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}'">
             <td class="clue-num">{{ clue.legacy_number }}</td>
             <td class="clue-text">{{ clue.clue_text[:120] }}{% if clue.clue_text|length > 120 %}…{% endif %}</td>
-            <td>{{ clue.author }}</td>
-            <td>{{ clue.solver or '—' }}</td>
+            <td>{{ clue.author }}{% if user and user.display_name == clue.author %} <span class="its-you-pill">you!</span>{% endif %}</td>
+            <td>{{ clue.solver or '—' }}{% if user and clue.solver and user.display_name == clue.solver %} <span class="its-you-pill">you!</span>{% endif %}</td>
             <td class="clue-solution">{{ (clue.solution if clue.solution else '(empty)')[:40] }}{% if clue.solution and clue.solution|length > 40 %}…{% endif %}</td>
             <td title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</td>
         </tr>

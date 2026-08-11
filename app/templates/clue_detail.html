@@ -21,19 +21,21 @@
         <div class="detail-grid">
             <div class="detail-section">
                 <h3>Author</h3>
-                <p>{{ clue.author }}</p>
+                <p>{{ clue.author }}{% if user and user.display_name == clue.author %}<span class="its-you-pill">you!</span>{% endif %}</p>
                 {% if clue.clues_by_author_so_far %}
-                <span class="meta-tag">#{{ clue.clues_by_author_so_far }} by this author</span>
+                {% set author_n = clue.clues_by_author_so_far %}
+                <span class="meta-tag {% if author_n == 1 %}pill-bronze{% elif author_n == 50 %}pill-silver{% endif %}">#{{ author_n }} by this author</span>
                 {% endif %}
             </div>
             <div class="detail-section">
                 <h3>Solver</h3>
-                <p>{{ clue.solver or '—' }}</p>
+                <p>{{ clue.solver or '—' }}{% if user and clue.solver and user.display_name == clue.solver %}<span class="its-you-pill">you!</span>{% endif %}</p>
                 {% if clue.override_solver %}
                 <span class="meta-tag">Override: {{ clue.override_solver }}</span>
                 {% endif %}
                 {% if clue.clues_by_solver_so_far %}
-                <span class="meta-tag">#{{ clue.clues_by_solver_so_far }} by this solver</span>
+                {% set solver_n = clue.clues_by_solver_so_far %}
+                <span class="meta-tag {% if solver_n == 1 %}pill-bronze{% elif solver_n == 50 %}pill-silver{% endif %}">#{{ solver_n }} by this solver</span>
                 {% endif %}
             </div>
             <div class="detail-section">

@@ -217,8 +217,15 @@ async def search_page(
             query = query.where(Clue.solver.ilike(f"%{solver}%"))
             count_query = count_query.where(Clue.solver.ilike(f"%{solver}%"))
         if solution:
-            query = query.where(Clue.solution.ilike(f"%{solution}%"))
-            count_query = count_query.where(Clue.solution.ilike(f"%{solution}%"))
+            # Quoted search → exact match (case-insensitive); otherwise ILIKE substring.
+            stripped = solution.strip()
+            if len(stripped) >= 2 and stripped[0] == '"' and stripped[-1] == '"':
+                exact = stripped[1:-1]
+                query = query.where(func.lower(Clue.solution) == func.lower(exact))
+                count_query = count_query.where(func.lower(Clue.solution) == func.lower(exact))
+            else:
+                query = query.where(Clue.solution.ilike(f"%{solution}%"))
+                count_query = count_query.where(Clue.solution.ilike(f"%{solution}%"))
         if date_from:
             query = query.where(Clue.clue_date >= date_from)
             count_query = count_query.where(Clue.clue_date >= date_from)

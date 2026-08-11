@@ -90,8 +90,15 @@ async def list_clues(
         count_query = count_query.where(Clue.solver.ilike(f"%{solver}%"))
 
     if solution:
-        query = query.where(Clue.solution.ilike(f"%{solution}%"))
-        count_query = count_query.where(Clue.solution.ilike(f"%{solution}%"))
+        # Quoted search → exact match (case-insensitive); otherwise ILIKE substring.
+        stripped = solution.strip()
+        if len(stripped) >= 2 and stripped[0] == '"' and stripped[-1] == '"':
+            exact = stripped[1:-1]
+            query = query.where(func.lower(Clue.solution) == func.lower(exact))
+            count_query = count_query.where(func.lower(Clue.solution) == func.lower(exact))
+        else:
+            query = query.where(Clue.solution.ilike(f"%{solution}%"))
+            count_query = count_query.where(Clue.solution.ilike(f"%{solution}%"))
 
     # Date range
     if date_from:

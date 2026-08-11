@@ -25,7 +25,7 @@
                        hx-include="#search-form" autocomplete="off">
             </div>
             <div class="filter-field">
-                <label>Solution</label>
+                <label>Solution <small>(use "quotes" for exact match)</small></label>
                 <input type="text" name="solution" value="{{ solution }}"
                        hx-get="/search" hx-target="#results" hx-trigger="keyup changed delay:400ms"
                        hx-include="#search-form" autocomplete="off">
