@@ -615,7 +615,16 @@ async def stats_page(request: Request, period: str = "all"):
             )
         ).first()
 
-        # Count of empty-string solutions for the special-case display
+        # Empty-string solution special case: fetch an example clue (its text)
+        # plus the total count for display.
+        empty_sol_row = (
+            await db.execute(
+                select(Clue.id, Clue.clue_text)
+                .where(Clue.solution.isnot(None), func.length(Clue.solution) == 0)
+                .order_by(Clue.id)
+                .limit(1)
+            )
+        ).first()
         empty_sol_count = (
             await db.execute(
                 select(func.count(Clue.id)).where(
@@ -711,6 +720,7 @@ async def stats_page(request: Request, period: str = "all"):
             "shortest_clue": shortest_clue,
             "longest_solution": longest_sol,
             "shortest_solution": shortest_sol,
+            "empty_sol_row": empty_sol_row,
             "empty_sol_count": empty_sol_count,
             "most_repeated": most_repeated,
             "longest_unsolved": longest_unsolved,

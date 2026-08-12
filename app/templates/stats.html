@@ -127,7 +127,13 @@
             <div class="record-card">
                 <div class="record-label">Shortest Solution (0 chars)</div>
                 <div class="record-value">
-                    <span class="mono-solution">(empty string)</span> — used by {{ empty_sol_count }} clue{{ '' if empty_sol_count == 1 else 's' }}
+                    <span class="mono-solution">(empty string)</span> — solution to
+                    {% if empty_sol_row %}
+                        <a href="/clue/{{ empty_sol_row[0] }}">{{ empty_sol_row[1][:120] }}{% if empty_sol_row[1]|length > 120 %}…{% endif %}</a>
+                    {% else %}
+                        <em>no clue with it</em>
+                    {% endif %}
+                    <span class="record-meta">— used by {{ empty_sol_count }} clue{{ '' if empty_sol_count == 1 else 's' }}</span>
                 </div>
             </div>
             {% elif shortest_solution %}
