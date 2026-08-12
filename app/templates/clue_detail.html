@@ -89,9 +89,9 @@
         {% if user and (user.is_editor or user.is_admin) %}
         <a href="/clue/{{ clue.id }}/edit" class="btn btn-small">Edit</a>
         {% endif %}
-        <a href="/user/{{ clue.author }}" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
+        <a href="/search?author=%22{{ clue.author | urlencode }}%22" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
         {% if clue.solver %}
-        <a href="/user/{{ clue.solver }}" class="btn btn-small btn-outline">More solved by {{ clue.solver }}</a>
+        <a href="/search?solver=%22{{ clue.solver | urlencode }}%22" class="btn btn-small btn-outline">More solved by {{ clue.solver }}</a>
         {% endif %}
     </div>
 </div>

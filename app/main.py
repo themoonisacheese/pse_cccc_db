@@ -219,11 +219,23 @@ async def search_page(
             query = query.where(Clue.search_vector.op("@@")(tsquery))
             count_query = count_query.where(Clue.search_vector.op("@@")(tsquery))
         if author:
-            query = query.where(Clue.author.ilike(f"%{author}%"))
-            count_query = count_query.where(Clue.author.ilike(f"%{author}%"))
+            stripped = author.strip()
+            if len(stripped) >= 2 and stripped[0] == '"' and stripped[-1] == '"':
+                exact = stripped[1:-1]
+                query = query.where(func.lower(Clue.author) == func.lower(exact))
+                count_query = count_query.where(func.lower(Clue.author) == func.lower(exact))
+            else:
+                query = query.where(Clue.author.ilike(f"%{author}%"))
+                count_query = count_query.where(Clue.author.ilike(f"%{author}%"))
         if solver:
-            query = query.where(Clue.solver.ilike(f"%{solver}%"))
-            count_query = count_query.where(Clue.solver.ilike(f"%{solver}%"))
+            stripped = solver.strip()
+            if len(stripped) >= 2 and stripped[0] == '"' and stripped[-1] == '"':
+                exact = stripped[1:-1]
+                query = query.where(func.lower(Clue.solver) == func.lower(exact))
+                count_query = count_query.where(func.lower(Clue.solver) == func.lower(exact))
+            else:
+                query = query.where(Clue.solver.ilike(f"%{solver}%"))
+                count_query = count_query.where(Clue.solver.ilike(f"%{solver}%"))
         if solution:
             # Quoted search → exact match (case-insensitive); otherwise ILIKE substring.
             stripped = solution.strip()
