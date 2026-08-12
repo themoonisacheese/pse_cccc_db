@@ -279,6 +279,7 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
 }
 .record-label { color: var(--fg-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; }
 .record-value { font-size: 0.95rem; line-height: 1.4; }
+.record-meta { color: var(--fg-dim); font-size: 0.8rem; margin-top: 0.35rem; }
 .mono-solution { font-family: var(--mono); color: var(--green); font-weight: 600; }
 
 /* ── User profile ─────────────────────── */
