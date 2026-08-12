@@ -410,6 +410,31 @@ async def admin_page(request: Request):
     )
 
 
+@app.get("/admin/badges", response_class=HTMLResponse)
+async def admin_badges_page(request: Request):
+    """Moderator page to catch up on missed CCCC badge grants (admins only)."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(
+            url="/api/auth/login?redirect_after=/admin/badges", status_code=303
+        )
+    if not user.is_admin:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "Admin privileges required. Only diamond moderators can access this page.",
+                "user": user,
+            },
+            status_code=403,
+        )
+    return templates.TemplateResponse(
+        "admin_badges.html",
+        {"request": request, "user": user},
+    )
+
+
 @app.get("/stats", response_class=HTMLResponse)
 async def stats_page(request: Request, period: str = "all"):
     """Statistics page."""

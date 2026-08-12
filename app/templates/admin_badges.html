@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Badge Catch-Up — CCCC DB{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>Badge Catch-Up</h1>
+    <p class="hint">
+        CCCC awards two badges on Puzzling SE: <strong>CCCContributor</strong> (first clue
+        authored, <a href="https://puzzling.stackexchange.com/help/badges/212/ccccontributor">badge 212</a>)
+        and <strong>CCCChampion</strong> (50th clue authored,
+        <a href="https://puzzling.stackexchange.com/help/badges/213/cccchampion">badge 213</a>).
+        This page shows who <em>should</em> have been granted a badge but hasn't been yet,
+        so you can award the ones you've missed.
+    </p>
+
+    <div class="admin-section">
+        <button class="btn" id="run-check" onclick="runCheck()">Run badge check</button>
+        <span class="hint" id="status"></span>
+    </div>
+
+    <div id="results"></div>
+</div>
+
+<script>
+async function runCheck() {
+    const btn = document.getElementById('run-check');
+    const status = document.getElementById('status');
+    btn.disabled = true;
+    status.textContent = 'Checking badges against the SE API…';
+
+    const resp = await fetch('/api/admin/badges/status');
+    if (!resp.ok) {
+        status.textContent = 'Failed to check badges (HTTP ' + resp.status + ').';
+        document.getElementById('results').innerHTML = '<p class="hint">Could not load badge status.</p>';
+        btn.disabled = false;
+        return;
+    }
+    const data = await resp.json();
+    status.textContent = 'Checked at ' + new Date(data.checked_at).toLocaleString();
+
+    const html = (data.results || []).map(r => {
+        const rows = (r.missed || []).map(e => `
+            <tr>
+                <td><a href="/user/${encodeURIComponent(e.author)}">${e.author}</a></td>
+                <td>${e.se_user_id ? `<a href="https://puzzling.stackexchange.com/users/${e.se_user_id}" target="_blank" rel="noopener">${e.se_user_id}</a>` : '—'}</td>
+                <td>${e.clues}</td>
+                <td><span class="badge badge-owner">Missed</span></td>
+            </tr>`).join('');
+
+        const unknownRows = (r.unknown || []).map(e => `
+            <tr>
+                <td><a href="/user/${encodeURIComponent(e.author)}">${e.author}</a></td>
+                <td>${e.se_user_id ? e.se_user_id : '— (unresolved)'}</td>
+                <td>${e.clues}</td>
+                <td><span class="badge">Unknown</span></td>
+            </tr>`).join('');
+
+        const already = (r.granted || []).length;
+
+        let table = `<h2>${r.badge} <small>(≥ ${r.threshold_clues} clue${r.threshold_clues === 1 ? '' : 's'})</small></h2>`;
+        if ((r.missed || []).length === 0 && unknownRows === '') {
+            table += `<p class="hint">Everyone eligible has been granted this badge ✅</p>`;
+        } else {
+            table += `<table class="clue-table">
+                <thead><tr><th>Author</th><th>SE User ID</th><th>Clues</th><th>Status</th></tr></thead>
+                <tbody>${rows || ''}${unknownRows || ''}</tbody></table>`;
+        }
+        table += `<p class="hint">${already} author${already === 1 ? '' : 's'} already holding it.</p>`;
+        return `<div class="admin-section">${table}</div>`;
+    }).join('');
+
+    document.getElementById('results').innerHTML = html || '<p class="hint">No results.</p>';
+    btn.disabled = false;
+}
+
+// Run once on load.
+runCheck();
+</script>
+{% endblock %}

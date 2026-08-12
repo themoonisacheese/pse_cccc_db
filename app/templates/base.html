@@ -26,6 +26,7 @@
                 {% endif %}
                 {% if user.is_admin %}
                     <a href="/admin" class="btn btn-small btn-outline">Admin</a>
+                    <a href="/admin/badges" class="btn btn-small btn-outline">Badges</a>
                 {% endif %}
                 <span class="user-badge" title="{{ user.display_name }}">
                     <a href="/user/{{ user.display_name }}">{{ user.display_name }}</a>
