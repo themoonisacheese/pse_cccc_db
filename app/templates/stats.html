@@ -138,14 +138,6 @@
                 </div>
             </div>
             {% endif %}
-            {% if oldest_unsolved %}
-            <div class="record-card">
-                <div class="record-label">Oldest Unsolved ({{ oldest_unsolved[4] }})</div>
-                <div class="record-value">
-                    <a href="/clue/{{ oldest_unsolved[0] }}">#{{ oldest_unsolved[2] or oldest_unsolved[0] }} by {{ oldest_unsolved[3] }}</a>
-                </div>
-            </div>
-            {% endif %}
             {% if longest_unsolved %}
             <div class="record-card">
                 <div class="record-label">Longest Unsolved ({{ longest_unsolved[6] }} days)</div>

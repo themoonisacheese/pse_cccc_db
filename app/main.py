@@ -531,22 +531,6 @@ async def stats_page(request: Request, period: str = "all"):
             )
         ).all()
 
-        # Oldest unsolved clue
-        oldest_unsolved = (
-            await db.execute(
-                select(
-                    Clue.id,
-                    Clue.legacy_number,
-                    Clue.clue_text,
-                    Clue.author,
-                    Clue.clue_date,
-                )
-                .where(Clue.solution.is_(None))
-                .order_by(Clue.clue_date.asc())
-                .limit(1)
-            )
-        ).first()
-
         # Longest time a clue went unsolved (max delta to next clue in chain)
         # Self-join on legacy_number: the "next" clue is the one that was posted
         # when someone solved the current one.  delta = next.clue_date - cur.clue_date
@@ -624,7 +608,6 @@ async def stats_page(request: Request, period: str = "all"):
             "shortest_solution": shortest_sol,
             "empty_sol_count": empty_sol_count,
             "most_repeated": most_repeated,
-            "oldest_unsolved": oldest_unsolved,
             "longest_unsolved": longest_unsolved,
             "busiest_days": busiest_days,
             "nemeses": nemeses,
