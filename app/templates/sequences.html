@@ -6,7 +6,8 @@
         <h1>Sequences &amp; Themes</h1>
         <p class="hero-sub">
             {{ "{:,}".format(total) }} group{{ "" if total == 1 else "s" }} of clues that go together —
-            loose themes anyone can add to, and setter-revealed author sequences shown in a different colour.
+            loose themes anyone can add to, setter-revealed author sequences shown in a different colour,
+            and loose tags.
         </p>
     </div>
 
@@ -19,6 +20,7 @@
         <div class="filter-tabs">
             <a href="/sequences?q={{ q }}" class="filter-tab {{ 'active' if filter == 'all' else '' }}">All</a>
             <a href="/sequences?filter=theme&q={{ q }}" class="filter-tab {{ 'active' if filter == 'theme' else '' }}">Themes</a>
+            <a href="/sequences?filter=tag&q={{ q }}" class="filter-tab {{ 'active' if filter == 'tag' else '' }}">Tags</a>
             <a href="/sequences?filter=author&q={{ q }}" class="filter-tab {{ 'active' if filter == 'author' else '' }}">Author sequences</a>
         </div>
         {% if user and (user.is_editor or user.is_admin) %}
@@ -38,6 +40,7 @@
                     <label>Type</label>
                     <select name="seq_type" class="form-input">
                         <option value="theme">Theme</option>
+                        <option value="tag">Tag</option>
                         <option value="author">Author sequence</option>
                     </select>
                 </div>
@@ -80,14 +83,14 @@
 
     <div class="sequence-list">
         {% for seq in sequences %}
-        <div class="sequence-card {{ 'seq-author' if seq.seq_type == 'author' else 'seq-theme' }}"
+        <div class="sequence-card {{ 'seq-author' if seq.seq_type == 'author' else ('seq-tag' if seq.seq_type == 'tag' else 'seq-theme') }}"
              style="{{ '--seq-color:' + seq.color if seq.color }}">
             <div class="sequence-card-title">
                 <a href="/sequences/{{ seq.id }}" class="sequence-name">
                     {{ seq.name or 'Unnamed sequence' }}
                 </a>
                 <span class="badge {{ 'badge-owner' if seq.seq_type == 'author' else 'badge' }}">
-                    {{ 'Author sequence' if seq.seq_type == 'author' else 'Theme' }}
+                    {{ 'Author sequence' if seq.seq_type == 'author' else ('Tag' if seq.seq_type == 'tag' else 'Theme') }}
                 </span>
             </div>
             <div class="sequence-card-meta">

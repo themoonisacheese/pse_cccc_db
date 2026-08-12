@@ -287,6 +287,8 @@ async def sequences_page(request: Request, q: str = "", filter: str = "all"):
             query = query.where(Sequence.seq_type == "author")
         elif filter == "theme":
             query = query.where(Sequence.seq_type == "theme")
+        elif filter == "tag":
+            query = query.where(Sequence.seq_type == "tag")
         if q:
             query = query.where(Sequence.name.ilike(f"%{q}%"))
         query = query.order_by(Sequence.id)

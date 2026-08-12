@@ -49,7 +49,8 @@ class Sequence(Base):
     # name for it" groups, simply leave it NULL.
     name: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # "author" = a setter revealed a run of their own clues; "theme" = loose
-    # playful theme. Author sequences render in a distinct color.
+    # playful theme; "tag" = a looser label (e.g. "all &lit clues") that applies
+    # to clues rather than ordering them. Author sequences render in a distinct color.
     seq_type: Mapped[str] = mapped_column(
         String(16), default="theme", server_default="theme"
     )

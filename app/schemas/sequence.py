@@ -22,7 +22,7 @@ class ClueRef(BaseModel):
 
 class SequenceBase(BaseModel):
     name: Optional[str] = None
-    seq_type: str = Field("theme", pattern="^(author|theme)$")
+    seq_type: str = Field("theme", pattern="^(author|theme|tag)$")
     author: Optional[str] = None
     color: Optional[str] = None
     description: Optional[str] = None
@@ -35,7 +35,7 @@ class SequenceCreate(SequenceBase):
 
 class SequenceUpdate(BaseModel):
     name: Optional[str] = None
-    seq_type: Optional[str] = Field(None, pattern="^(author|theme)$")
+    seq_type: Optional[str] = Field(None, pattern="^(author|theme|tag)$")
     author: Optional[str] = None
     color: Optional[str] = None
     description: Optional[str] = None

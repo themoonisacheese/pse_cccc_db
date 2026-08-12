@@ -77,7 +77,7 @@ async def list_sequences(
 ):
     """List sequences. Optionally filter by type ('author'|'theme') or text."""
     query = select(Sequence)
-    if seq_type in ("author", "theme"):
+    if seq_type in ("author", "theme", "tag"):
         query = query.where(Sequence.seq_type == seq_type)
     if q:
         query = query.where(Sequence.name.ilike(f"%{q}%"))
@@ -88,7 +88,7 @@ async def list_sequences(
 
     # Total matching the same (type[, name]) filter, ignoring the page limit.
     count_query = select(func.count(Sequence.id))
-    if seq_type in ("author", "theme"):
+    if seq_type in ("author", "theme", "tag"):
         count_query = count_query.where(Sequence.seq_type == seq_type)
     if q:
         count_query = count_query.where(Sequence.name.ilike(f"%{q}%"))

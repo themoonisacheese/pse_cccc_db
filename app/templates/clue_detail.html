@@ -75,9 +75,9 @@
             <h3>Sequences &amp; Themes</h3>
             <div class="sequence-tags">
                 {% for seq in clue.sequences %}
-                <a href="/sequences/{{ seq.id }}" class="sequence-tag {{ 'seq-author' if seq.seq_type == 'author' else 'seq-theme' }}"
+                <a href="/sequences/{{ seq.id }}" class="sequence-tag {{ 'seq-author' if seq.seq_type == 'author' else ('seq-tag' if seq.seq_type == 'tag' else 'seq-theme') }}"
                    {% if seq.color %}style="--seq-color:{{ seq.color }}"{% endif %}>
-                    {{ seq.name or ('Author ' + (seq.author or 'sequence') if seq.seq_type == 'author' else 'Theme') }}
+                    {{ seq.name or ('Author ' + (seq.author or 'sequence') if seq.seq_type == 'author' else ('Tag' if seq.seq_type == 'tag' else 'Theme')) }}
                 </a>
                 {% endfor %}
             </div>

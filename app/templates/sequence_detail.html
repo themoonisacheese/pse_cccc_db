@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ seq.name or 'Unnamed sequence' }} — CCCC DB{% endblock %}
 {% block content %}
-<div class="sequence-detail-page {{ 'seq-author' if seq.seq_type == 'author' else 'seq-theme' }}">
+<div class="sequence-detail-page {{ 'seq-author' if seq.seq_type == 'author' else ('seq-tag' if seq.seq_type == 'tag' else 'seq-theme') }}">
     <div class="page-head sequence-head">
         <h1>
             {{ seq.name or 'Unnamed sequence' }}
             <span class="badge {{ 'badge-owner' if seq.seq_type == 'author' else 'badge' }}">
-                {{ 'Author sequence' if seq.seq_type == 'author' else 'Theme' }}
+                {{ 'Author sequence' if seq.seq_type == 'author' else ('Tag' if seq.seq_type == 'tag' else 'Theme') }}
             </span>
         </h1>
         <div class="sequence-meta">
@@ -36,6 +36,7 @@
                     <label>Type</label>
                     <select name="seq_type" class="form-input">
                         <option value="theme" {{ 'selected' if seq.seq_type == 'theme' else '' }}>Theme</option>
+                        <option value="tag" {{ 'selected' if seq.seq_type == 'tag' else '' }}>Tag</option>
                         <option value="author" {{ 'selected' if seq.seq_type == 'author' else '' }}>Author sequence</option>
                     </select>
                 </div>

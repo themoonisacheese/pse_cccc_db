@@ -336,6 +336,7 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
 }
 .sequence-card.seq-author { --seq-color: #d99dff; }   /* author seqs in distinct color */
 .sequence-card.seq-theme  { --seq-color: #7aa2f7; }
+.sequence-card.seq-tag    { --seq-color: #7dd88a; }
 .sequence-card-title { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .sequence-name { font-weight: 600; font-size: 1.05rem; color: var(--fg); }
 .sequence-card-meta { color: var(--fg-dim); font-size: 0.85rem; margin-top: 0.25rem; }
@@ -363,6 +364,7 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
 }
 .sequence-tag.seq-author { --seq-color: #d99dff; }
 .sequence-tag.seq-theme  { --seq-color: #7aa2f7; }
+.sequence-tag.seq-tag    { --seq-color: #7dd88a; }
 .sequence-tag:hover { text-decoration: underline; }
 
 .btn-danger { background: #f7768e; color: #1a1b26; border: none; }
