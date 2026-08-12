@@ -354,7 +354,7 @@ async def sequence_detail(request: Request, sequence_id: int):
 @app.get("/clue/{clue_id}", response_class=HTMLResponse)
 async def clue_detail(request: Request, clue_id: int):
     """Detailed view of a single clue."""
-    from sqlalchemy import select
+    from sqlalchemy import select, func
     from app.models.clue import Clue
 
     user = getattr(request.state, "user", None)
@@ -369,9 +369,29 @@ async def clue_detail(request: Request, clue_id: int):
                 status_code=404,
             )
 
+        # Dynamic "solution used N times" count — computed live, not from the
+        # stale legacy `answer_count` import. Case-insensitive match.
+        solution_use_count = 0
+        exact_solution = (
+            clue.solution.strip().lower() if clue.solution and clue.solution.strip() else None
+        )
+        if exact_solution:
+            solution_use_count = (
+                await db.execute(
+                    select(func.count(Clue.id)).where(
+                        func.lower(Clue.solution) == exact_solution
+                    )
+                )
+            ).scalar() or 0
+
     return templates.TemplateResponse(
         "clue_detail.html",
-        {"request": request, "clue": clue, "user": user},
+        {
+            "request": request,
+            "clue": clue,
+            "user": user,
+            "solution_use_count": solution_use_count,
+        },
     )
 
 

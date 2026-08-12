@@ -45,8 +45,8 @@
                 {% if clue.answer_length %}
                 <span class="meta-tag">{{ clue.answer_length }} letters</span>
                 {% endif %}
-                {% if clue.answer_count and clue.answer_count > 1 %}
-                <span class="meta-tag">Appears {{ clue.answer_count }}×</span>
+                {% if solution_use_count and solution_use_count > 1 %}
+                <span class="meta-tag">This solution used {{ solution_use_count }}×</span>
                 {% endif %}
                 {% else %}
                 <p class="text-muted">Not yet solved</p>
