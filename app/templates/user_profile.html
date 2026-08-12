@@ -167,6 +167,32 @@
     </div>
     {% endif %}
 
+    {# ── Author sequences by this setter ── #}
+    {% if author_sequences %}
+    <div class="stats-section">
+        <h2>Sequences by {{ profile_name }}</h2>
+        <table class="clue-table">
+            <thead>
+                <tr><th>#</th><th>Sequence</th><th>Clues</th></tr>
+            </thead>
+            <tbody>
+                {% for seq, count in author_sequences %}
+                <tr class="seq-row" onclick="window.location='/sequences/{{ seq.id }}'">
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        <a href="/sequences/{{ seq.id }}">{{ seq.name or '(unnamed sequence)' }}</a>
+                        {% if seq.seq_type == 'author' %}
+                        <span class="badge badge-owner">author</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
     {# ── Links ── #}
     <div class="clue-detail-footer">
         <a href="/search?author={{ profile_name }}" class="btn btn-small btn-outline">All authored clues</a>

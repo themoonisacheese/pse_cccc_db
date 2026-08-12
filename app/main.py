@@ -786,6 +786,7 @@ async def user_profile(request: Request, username: str):
     from sqlalchemy import select, func, or_
     from sqlalchemy.orm import aliased
     from app.models.clue import Clue, ClueEditHistory, User
+    from app.models.sequence import Sequence, clue_sequences
 
     user = getattr(request.state, "user", None)
     NextClue = aliased(Clue)
@@ -925,6 +926,22 @@ async def user_profile(request: Request, username: str):
             .limit(15)
         )).scalars().all()
 
+        # ── Author sequences by this setter (author type only; excludes
+        #    themes/tags they merely participated in) ──
+        author_sequences = (await db.execute(
+            select(
+                Sequence,
+                func.count(clue_sequences.c.clue_id).label("clue_count"),
+            )
+            .outerjoin(
+                clue_sequences,
+                clue_sequences.c.sequence_id == Sequence.id,
+            )
+            .where(Sequence.seq_type == "author", Sequence.author == username)
+            .group_by(Sequence.id)
+            .order_by(func.count(clue_sequences.c.clue_id).desc(), Sequence.name)
+        )).all()
+
     return templates.TemplateResponse(
         "user_profile.html",
         {
@@ -947,6 +964,7 @@ async def user_profile(request: Request, username: str):
             "longest_unsolved": longest_unsolved,
             "solution_length_stats": solution_length_stats,
             "recent": recent,
+            "author_sequences": author_sequences,
         },
     )
 
