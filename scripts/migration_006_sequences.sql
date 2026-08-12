@@ -1,16 +1,19 @@
--- Migration 006: sequences (themes + author sequences).
+-- Migration 006: sequences (themes + author sequences)
+--
 -- Sequences are many-to-many linked to clues. The old spreadsheet tracked
 -- loose shared themes and setter-revealed author sequences as two separate
--- concepts; here they are unified into one `sequences` table distinguished
--- only by seq_type ('author' = setter-revealed run, 'theme' = loose theme).
+-- concepts, but here they are unified into one "sequences" table
+-- distinguished only by seq_type (author = setter-revealed run, theme = loose
+-- theme). NOTE: this project's migration runner splits statements on the
+-- semicolon character and does not understand comments, so this file's
+-- comments must not contain a semicolon anywhere.
 
--- Sequences themselves
 CREATE TABLE IF NOT EXISTS sequences (
     id          SERIAL PRIMARY KEY,
     name        VARCHAR(512),                    -- optional (legacy/unnamed groups are NULL)
     seq_type    VARCHAR(16) NOT NULL DEFAULT 'theme',
     author      VARCHAR(255),                    -- informative, for author sequences
-    color       VARCHAR(32),                     -- optional override; UI defaults by type
+    color       VARCHAR(32),                     -- optional override, UI defaults by type
     description TEXT,                            -- optional note about the sequence
     legacy_key  INTEGER,                         -- representative clue# from the old sheet
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
