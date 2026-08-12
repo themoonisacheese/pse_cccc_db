@@ -177,7 +177,7 @@ def parse_csv_rows(csv_text: str, limit: int | None = None) -> list[dict]:
             "one_word_answer_length": parse_int(getcol(10)),
             "override_solver": getcol(13) or None,
             "solver": getcol(14) or None,
-            "solution": getcol(15),
+            "solution": getcol(15).strip().upper(),
             "explanation": getcol(17) or None,
         }
 

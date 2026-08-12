@@ -200,6 +200,11 @@ async def create_clue(
     """Create a new clue. Requires room-owner privileges."""
     user = _check_write_perm(request)
     clue = Clue(**clue_in.model_dump())
+
+    # Normalize solution to uppercase on ingest (crosswords convention).
+    if clue.solution:
+        clue.solution = clue.solution.strip().upper()
+
     clue.entered_by_user_id = user.id
 
     # Auto-assign legacy_number if not provided
@@ -252,6 +257,11 @@ async def update_clue(
         raise HTTPException(status_code=404, detail="Clue not found")
 
     update_data = clue_in.model_dump(exclude_unset=True)
+
+    # Normalize solution to uppercase on ingest (crosswords convention).
+    if "solution" in update_data and update_data["solution"]:
+        update_data["solution"] = update_data["solution"].strip().upper()
+
     for field, new_value in update_data.items():
         old_value = getattr(clue, field, None)
         if old_value != new_value:
