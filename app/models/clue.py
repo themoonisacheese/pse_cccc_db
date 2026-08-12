@@ -70,7 +70,6 @@ class Clue(Base):
         server_default=text("LENGTH(REPLACE(REPLACE(solution, ' ', ''), '-', ''))")
     )
     one_word_answer_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    answer_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     clue_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)

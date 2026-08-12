@@ -20,7 +20,6 @@ class ClueBase(BaseModel):
     override_solver: Optional[str] = None
     solution: Optional[str] = None
     one_word_answer_length: Optional[int] = None
-    answer_count: Optional[int] = None
     explanation: Optional[str] = None
     clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None
@@ -41,7 +40,6 @@ class ClueUpdate(BaseModel):
     override_solver: Optional[str] = None
     solution: Optional[str] = None
     one_word_answer_length: Optional[int] = None
-    answer_count: Optional[int] = None
     explanation: Optional[str] = None
     clue_date: Optional[date_type] = None
     number_on_date: Optional[int] = None

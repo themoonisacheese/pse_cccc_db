@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         # Run all migrations in order
-        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql"]:
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql", "migration_007_drop_answer_count.sql"]:
             migration_path = BASE_DIR.parent / "scripts" / migration_file
             if migration_path.exists():
                 migration_sql = migration_path.read_text()

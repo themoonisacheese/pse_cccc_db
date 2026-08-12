@@ -160,7 +160,7 @@ async def export_csv(db: AsyncSession = Depends(get_db)):
     writer.writerow([
         "legacy_number", "clue_text", "clue_length", "author",
         "solver", "override_solver", "solution", "answer_length",
-        "one_word_answer_length", "answer_count", "explanation",
+        "one_word_answer_length", "explanation",
         "clue_date", "number_on_date", "clues_by_author_so_far",
         "transcript_link",
     ])
@@ -168,8 +168,8 @@ async def export_csv(db: AsyncSession = Depends(get_db)):
         writer.writerow([
             c.legacy_number, c.clue_text, c.clue_length, c.author,
             c.solver or "", c.override_solver or "", c.solution, c.answer_length,
-            c.one_word_answer_length or "", c.answer_count or "",
-            c.explanation or "", c.clue_date or "", c.number_on_date or "",
+            c.one_word_answer_length or "", c.explanation or "",
+            c.clue_date or "", c.number_on_date or "",
             c.clues_by_author_so_far or "", c.transcript_link or "",
         ])
 
