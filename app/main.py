@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.api.admin import router as admin_router
 from app.api.auth import get_current_user, router as auth_router
 from app.api.clues import router as clues_router
+from app.api.sequences import router as sequences_router
 from app.api.transcript import router as transcript_router
 from app.db.session import async_session, engine, Base
 
@@ -86,7 +87,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         # Run all migrations in order
-        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql"]:
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql"]:
             migration_path = BASE_DIR.parent / "scripts" / migration_file
             if migration_path.exists():
                 migration_sql = migration_path.read_text()
@@ -148,6 +149,7 @@ app.add_middleware(UserMiddleware)
 # ── API routers ─────────────────────────────────────────────
 
 app.include_router(clues_router, prefix="/api")
+app.include_router(sequences_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(transcript_router, prefix="/api")
@@ -268,6 +270,82 @@ async def search_page(
             "total": total,
             "total_pages": total_pages,
         },
+    )
+
+
+@app.get("/sequences", response_class=HTMLResponse)
+async def sequences_page(request: Request, q: str = "", filter: str = "all"):
+    """List all themes + author sequences."""
+    from sqlalchemy import select, func
+    from app.models.sequence import Sequence
+    from sqlalchemy.orm import selectinload
+
+    user = getattr(request.state, "user", None)
+    async with async_session() as db:
+        query = select(Sequence).options(selectinload(Sequence.clues))
+        if filter == "author":
+            query = query.where(Sequence.seq_type == "author")
+        elif filter == "theme":
+            query = query.where(Sequence.seq_type == "theme")
+        if q:
+            query = query.where(Sequence.name.ilike(f"%{q}%"))
+        query = query.order_by(Sequence.id)
+        result = await db.execute(query)
+        sequences = result.scalars().all()
+
+        total = (await db.execute(select(func.count(Sequence.id)))).scalar()
+
+    return templates.TemplateResponse(
+        "sequences.html",
+        {
+            "request": request,
+            "user": user,
+            "sequences": sequences,
+            "total": total,
+            "q": q,
+            "filter": filter,
+        },
+    )
+
+
+@app.get("/sequences/{sequence_id}", response_class=HTMLResponse)
+async def sequence_detail(request: Request, sequence_id: int):
+    """Detailed view of a single sequence and its member clues."""
+    from sqlalchemy import select
+    from app.models.sequence import Sequence
+    from sqlalchemy.orm import selectinload
+    from fastapi.responses import RedirectResponse
+
+    user = getattr(request.state, "user", None)
+    async with async_session() as db:
+        result = await db.execute(
+            select(Sequence)
+            .options(selectinload(Sequence.clues))
+            .where(Sequence.id == sequence_id)
+        )
+        seq = result.scalar_one_or_none()
+
+        # Handle /sequences/<legacy_number> gracefully (redirect to the real seq page)
+        if not seq and sequence_id < 10_000_000:
+            legacy = await db.execute(
+                select(Sequence.id).where(Sequence.legacy_key == sequence_id)
+            )
+            lk = legacy.scalar_one_or_none()
+            if lk:
+                return RedirectResponse(url=f"/sequences/{lk}", status_code=301)
+
+        if not seq:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Sequence not found", "user": user},
+                status_code=404,
+            )
+
+        clues = sorted((seq.clues or []), key=lambda c: (c.legacy_number or 0))
+
+    return templates.TemplateResponse(
+        "sequence_detail.html",
+        {"request": request, "user": user, "seq": seq, "clues": clues},
     )
 
 

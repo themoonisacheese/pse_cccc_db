@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import TSVECTOR
 
 from app.db.session import Base
+from app.models.sequence import Sequence  # noqa: F401  (registers tables + resolves relationship)
 
 
 class User(Base):
@@ -85,6 +86,13 @@ class Clue(Base):
     )
     author_user: Mapped[User | None] = relationship(
         back_populates="clues_authored", foreign_keys=[entered_by_user_id]
+    )
+
+    # Sequences/themes this clue belongs to (many-to-many via clue_sequences).
+    sequences: Mapped[list["Sequence"]] = relationship(
+        secondary="clue_sequences",
+        back_populates="clues",
+        lazy="selectin",
     )
 
     created_at: Mapped[datetime] = mapped_column(

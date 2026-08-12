@@ -69,6 +69,20 @@
             </a>
         </div>
         {% endif %}
+
+        {% if clue.sequences %}
+        <div class="detail-section">
+            <h3>Sequences &amp; Themes</h3>
+            <div class="sequence-tags">
+                {% for seq in clue.sequences %}
+                <a href="/sequences/{{ seq.id }}" class="sequence-tag {{ 'seq-author' if seq.seq_type == 'author' else 'seq-theme' }}"
+                   {% if seq.color %}style="--seq-color:{{ seq.color }}"{% endif %}>
+                    {{ seq.name or ('Author ' + (seq.author or 'sequence') if seq.seq_type == 'author' else 'Theme') }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="clue-detail-footer">

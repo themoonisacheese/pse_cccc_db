@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Sequences — CCCC DB{% endblock %}
+{% block content %}
+<div class="sequences-page">
+    <div class="page-head">
+        <h1>Sequences &amp; Themes</h1>
+        <p class="hero-sub">
+            {{ "{:,}".format(total) }} group{{ "" if total == 1 else "s" }} of clues that go together —
+            loose themes anyone can add to, and setter-revealed author sequences shown in a different colour.
+        </p>
+    </div>
+
+    <div class="filter-bar">
+        <form action="/sequences" method="get" class="search-form">
+            <input type="text" name="q" value="{{ q }}" placeholder="Search by sequence name…"
+                   class="search-input" autocomplete="off">
+            <button type="submit" class="btn">Search</button>
+        </form>
+        <div class="filter-tabs">
+            <a href="/sequences?q={{ q }}" class="filter-tab {{ 'active' if filter == 'all' else '' }}">All</a>
+            <a href="/sequences?filter=theme&q={{ q }}" class="filter-tab {{ 'active' if filter == 'theme' else '' }}">Themes</a>
+            <a href="/sequences?filter=author&q={{ q }}" class="filter-tab {{ 'active' if filter == 'author' else '' }}">Author sequences</a>
+        </div>
+        {% if user and (user.is_editor or user.is_admin) %}
+        <a href="#" class="btn btn-small btn-outline" onclick="document.getElementById('new-seq-form').style.display='block'; return false;">+ New sequence</a>
+        {% endif %}
+    </div>
+
+    {% if user and (user.is_editor or user.is_admin) %}
+    <div id="new-seq-form" class="new-seq-form" style="display:none">
+        <form id="new-sequence" class="seq-form">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>Name <small>(optional — leave blank for unnamed)</small></label>
+                    <input type="text" name="name" class="form-input" placeholder="e.g. Cheese clues">
+                </div>
+                <div class="form-field">
+                    <label>Type</label>
+                    <select name="seq_type" class="form-input">
+                        <option value="theme">Theme</option>
+                        <option value="author">Author sequence</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Author <small>(author sequences)</small></label>
+                    <input type="text" name="author" class="form-input" placeholder="Setter name (optional)">
+                </div>
+            </div>
+            <div class="form-field">
+                <label>Description</label>
+                <textarea name="description" class="form-input" rows="2" placeholder="What ties these together? (optional)"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn">Create</button>
+                <button type="button" class="btn btn-outline" onclick="this.closest('#new-seq-form').style.display='none'">Cancel</button>
+            </div>
+            <p id="new-seq-result"></p>
+        </form>
+    </div>
+    <script>
+    document.getElementById('new-sequence').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        for (const k of Object.keys(data)) if (data[k] === '') data[k] = null;
+        const resp = await fetch('/api/sequences', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        const res = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+            window.location.href = '/sequences/' + res.id;
+        } else {
+            document.getElementById('new-seq-result').innerHTML =
+                `<p class="error">${res.detail || 'Could not create'}</p>`;
+        }
+    });
+    </script>
+    {% endif %}
+
+    <div class="sequence-list">
+        {% for seq in sequences %}
+        <div class="sequence-card {{ 'seq-author' if seq.seq_type == 'author' else 'seq-theme' }}"
+             style="{{ '--seq-color:' + seq.color if seq.color }}">
+            <div class="sequence-card-title">
+                <a href="/sequences/{{ seq.id }}" class="sequence-name">
+                    {{ seq.name or 'Unnamed sequence' }}
+                </a>
+                <span class="badge {{ 'badge-owner' if seq.seq_type == 'author' else 'badge' }}">
+                    {{ 'Author sequence' if seq.seq_type == 'author' else 'Theme' }}
+                </span>
+            </div>
+            <div class="sequence-card-meta">
+                {{ seq.clues|length }} clue{{ "" if seq.clues|length == 1 else "s" }}
+                {% if seq.author %} · by {{ seq.author }}{% endif %}
+                {% if seq.legacy_key %} · legacy #{{ seq.legacy_key }}{% endif %}
+            </div>
+            {% if seq.description %}
+            <p class="sequence-desc">{{ seq.description }}</p>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="empty-state">No sequences found.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

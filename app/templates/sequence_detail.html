@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}{{ seq.name or 'Unnamed sequence' }} — CCCC DB{% endblock %}
+{% block content %}
+<div class="sequence-detail-page {{ 'seq-author' if seq.seq_type == 'author' else 'seq-theme' }}">
+    <div class="page-head sequence-head">
+        <h1>
+            {{ seq.name or 'Unnamed sequence' }}
+            <span class="badge {{ 'badge-owner' if seq.seq_type == 'author' else 'badge' }}">
+                {{ 'Author sequence' if seq.seq_type == 'author' else 'Theme' }}
+            </span>
+        </h1>
+        <div class="sequence-meta">
+            {{ seq.clues|length }} clue{{ "" if seq.clues|length == 1 else "s" }}
+            {% if seq.author %} · by <a href="/user/{{ seq.author }}">{{ seq.author }}</a>{% endif %}
+            {% if seq.legacy_key %} · imported from legacy #{{ seq.legacy_key }}{% endif %}
+        </div>
+        {% if seq.description %}
+        <p class="sequence-desc">{{ seq.description }}</p>
+        {% endif %}
+        {% if user and (user.is_editor or user.is_admin) %}
+        <div class="sequence-actions">
+            <button class="btn btn-small btn-outline" onclick="document.getElementById('edit-seq-form').style.display='block'">Edit sequence</button>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if user and (user.is_editor or user.is_admin) %}
+    <div id="edit-seq-form" class="new-seq-form" style="display:none">
+        <form id="edit-sequence" class="seq-form">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>Name <small>(blank = unnamed)</small></label>
+                    <input type="text" name="name" class="form-input" value="{{ seq.name or '' }}">
+                </div>
+                <div class="form-field">
+                    <label>Type</label>
+                    <select name="seq_type" class="form-input">
+                        <option value="theme" {{ 'selected' if seq.seq_type == 'theme' else '' }}>Theme</option>
+                        <option value="author" {{ 'selected' if seq.seq_type == 'author' else '' }}>Author sequence</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Author</label>
+                    <input type="text" name="author" class="form-input" value="{{ seq.author or '' }}">
+                </div>
+                <div class="form-field">
+                    <label>Color <small>(optional, e.g. #e07b39)</small></label>
+                    <input type="text" name="color" class="form-input" value="{{ seq.color or '' }}">
+                </div>
+            </div>
+            <div class="form-field">
+                <label>Description</label>
+                <textarea name="description" class="form-input" rows="2">{{ seq.description or '' }}</textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn">Save</button>
+                <button type="button" class="btn btn-outline" onclick="this.closest('#edit-seq-form').style.display='none'">Cancel</button>
+                {% if user.is_admin %}
+                <button type="button" id="delete-seq" class="btn btn-danger">Delete sequence</button>
+                {% endif %}
+            </div>
+            <p id="edit-seq-result"></p>
+        </form>
+    </div>
+    <script>
+    document.getElementById('edit-sequence').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        for (const k of Object.keys(data)) if (data[k] === '') data[k] = null;
+        const resp = await fetch('/api/sequences/{{ seq.id }}', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        if (resp.ok) { window.location.reload(); }
+        else {
+            const err = await resp.json().catch(() => ({}));
+            document.getElementById('edit-seq-result').innerHTML = `<p class="error">${err.detail || 'Save failed'}</p>`;
+        }
+    });
+    {% if user.is_admin %}
+    document.getElementById('delete-seq').addEventListener('click', async () => {
+        if (!confirm('Delete this sequence? This removes its membership links (clues are kept).')) return;
+        const resp = await fetch('/api/sequences/{{ seq.id }}', { method: 'DELETE' });
+        if (resp.ok) { window.location.href = '/sequences'; }
+        else { alert('Delete failed'); }
+    });
+    {% endif %}
+    </script>
+    {% endif %}
+
+    <div class="detail-section sequence-members-section">
+        <h3>Member clues</h3>
+        {% if user and (user.is_editor or user.is_admin) %}
+        <div class="member-add">
+            <input type="number" id="member-add-num" class="form-input" placeholder="Clue legacy # to add (e.g. 1234)" min="1">
+            <button class="btn btn-small" id="member-add-btn">Add clue</button>
+        </div>
+        {% endif %}
+        <table class="clue-table">
+            <thead>
+                <tr><th>#</th><th>Clue</th><th>Author</th><th>Solution</th>{% if user and (user.is_editor or user.is_admin) %}<th></th>{% endif %}</tr>
+            </thead>
+            <tbody>
+                {% for c in clues %}
+                <tr class="clue-row" onclick="window.location='/clue/{{ c.id }}'">
+                    <td class="clue-num">{{ c.legacy_number }}</td>
+                    <td class="clue-text">{{ c.clue_text[:120] }}{% if c.clue_text|length > 120 %}…{% endif %}</td>
+                    <td><a href="/user/{{ c.author }}">{{ c.author }}</a></td>
+                    <td class="clue-solution">{{ (c.solution or '(not solved)')[:30] }}</td>
+                    {% if user and (user.is_editor or user.is_admin) %}
+                    <td class="member-remove-cell">
+                        <button class="btn btn-small btn-danger member-remove" data-cid="{{ c.id }}" onclick="event.stopPropagation()">Remove</button>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="empty-state">No clues in this sequence yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if user and (user.is_editor or user.is_admin) %}
+<script>
+document.getElementById('member-add-btn').addEventListener('click', async () => {
+    const num = document.getElementById('member-add-num').value;
+    if (!num) return;
+    // Resolve legacy number -> clue id, then add
+    const lookup = await fetch('/api/clues?legacy_number=' + num + '&page_size=1').then(r => r.json());
+    if (!lookup.clues || lookup.clues.length === 0) { alert('Clue #' + num + ' not found'); return; }
+    const cid = lookup.clues[0].id;
+    const resp = await fetch('/api/sequences/{{ seq.id }}/clues/' + cid, { method: 'POST' });
+    if (resp.ok) { window.location.reload(); }
+    else { alert('Could not add clue'); }
+});
+document.querySelectorAll('.member-remove').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const resp = await fetch('/api/sequences/{{ seq.id }}/clues/' + btn.dataset.cid, { method: 'DELETE' });
+        if (resp.ok) { window.location.reload(); }
+        else { alert('Could not remove clue'); }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

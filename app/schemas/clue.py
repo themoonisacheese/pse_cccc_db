@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.sequence import ClueSequenceRef
+
 
 # ── Clue schemas ─────────────────────────────────────────────
 
@@ -57,6 +59,8 @@ class ClueOut(ClueBase):
     entered_by_user_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    # Sequences/themes this clue belongs to.
+    sequences: list[ClueSequenceRef] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
