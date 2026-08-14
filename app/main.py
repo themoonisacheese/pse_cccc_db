@@ -737,6 +737,33 @@ async def stats_page(request: Request, period: str = "all"):
         ).all()
         max_monthly = max((r[1] for r in per_month), default=1)
 
+        # ── Author sequences section ─────────────────────────────
+        # Each author sequence is an interval [min member clue date,
+        # max member clue date]. We derive all the "sequences going on at
+        # once" stats purely from that interval data in Python below.
+        from app.models.sequence import Sequence as SeqModel, clue_sequences as cs_tbl
+
+        author_seq_rows = (
+            await db.execute(
+                select(
+                    SeqModel.id.label("id"),
+                    SeqModel.name.label("name"),
+                    SeqModel.author.label("author"),
+                    func.count(Clue.id).label("clue_count"),
+                    func.min(Clue.legacy_number).label("start_num"),
+                    func.max(Clue.legacy_number).label("end_num"),
+                    func.min(Clue.clue_date).label("start_date"),
+                    func.max(Clue.clue_date).label("end_date"),
+                )
+                .join(cs_tbl, cs_tbl.c.sequence_id == SeqModel.id)
+                .join(Clue, Clue.id == cs_tbl.c.clue_id)
+                .where(SeqModel.seq_type == "author")
+                .group_by(SeqModel.id)
+            )
+        ).all()
+
+        seq_stats = _author_sequence_stats(author_seq_rows)
+
     return templates.TemplateResponse(
         "stats.html",
         {
@@ -760,6 +787,8 @@ async def stats_page(request: Request, period: str = "all"):
             "nemeses": nemeses,
             "per_month": per_month,
             "max_monthly": max_monthly,
+            "seq_stats": seq_stats,
+            "has_author_sequences": bool(seq_stats and (seq_stats["total"] or seq_stats["crowded"])),
         },
     )
 
@@ -1019,3 +1048,119 @@ async def my_profile(request: Request):
     if not user:
         return RedirectResponse(url="/api/auth/login?redirect_after=/me", status_code=303)
     return RedirectResponse(url=f"/user/{user.display_name}", status_code=301)
+
+
+# ── Author sequence "chains going on at once" stats ──────────────
+
+def _author_sequence_stats(rows):
+    """Compute author-sequence concurrency stats from per-sequence intervals.
+
+    Each sequence is an interval between its earliest and latest member clue
+    date. Two sequences "run at once" if those intervals overlap. We compute
+    the concurrency curve as a sweep over date intervals, and the leaderboards
+    by bucketing each sequence to the sequence(s) it belongs to by author.
+    Reports rows carrying only legacy_number (no clue->date join) are skipped.
+    """
+    from datetime import timedelta
+
+    today = date.today()
+
+    # Normalise each row to an interval [start, end] (dates), skipping any
+    # sequence without both boundary dates.
+    intervals = []
+    for r in rows:
+        start, end = r.start_date, r.end_date
+        if start is None or end is None:
+            continue
+        intervals.append({
+            "id": r.id,
+            "name": r.name,
+            "author": r.author,
+            "clue_count": r.clue_count,
+            "start_num": r.start_num,
+            "end_num": r.end_num,
+            "start": start,
+            "end": end,
+            "days": (end - start).days + 1,
+        })
+
+    total = len(intervals)
+    longest = None
+    max_concurrent = 0
+    crowded_moments = []  # (date, count) sampled at each event boundary
+    longest_author = None
+    most_sequences_author = None
+
+    # ── Longest sequence (by span in days) ──
+    if intervals:
+        longest = max(intervals, key=lambda s: s["days"])
+
+        # Concurrency: classic interval sweep. Collect every boundary event,
+        # sort by date, and track the running count of open sequences.
+        events = []
+        for s in intervals:
+            events.append((s["start"], +1, s))
+            # An interval starting and ending the same day should count once.
+            # Use end+1 so a same-day end closes after a same-day start.
+            events.append((s["end"] + timedelta(days=1), -1, s))
+        events.sort(key=lambda e: (e[0], e[1]))  # closes before opens when same day
+
+        running = 0
+        best_running = 0
+        for day, delta, _seq in events:
+            running += delta
+            if running > best_running:
+                best_running = running
+            crowded_moments.append((day, running))
+        max_concurrent = best_running
+
+        # ── Author with longest sequence (by span) ──
+        longest_author = {
+            "author": longest["author"],
+            "name": longest["name"],
+            "days": longest["days"],
+            "id": longest["id"],
+            "clue_count": longest["clue_count"],
+        }
+
+        # ── User with the most sequences (distinct runs authored) ──
+        by_author: dict[str, list] = {}
+        for s in intervals:
+            by_author.setdefault(s["author"], []).append(s)
+        most_sequences_author = max(
+            ({"author": a, "count": len(lst)} for a, lst in by_author.items()),
+            key=lambda x: x["count"],
+            default=None,
+        )
+
+    # Build the concurrency series as date->count across the full encountered
+    # range (for the timeline chart), binning by calendar day.
+    series = []
+    if crowded_moments:
+        # Record the highest concurrency observed on each distinct day.
+        per_day: dict[date, int] = {}
+        for day, cnt in crowded_moments:
+            if cnt > per_day.get(day, -1):
+                per_day[day] = cnt
+        series = sorted(per_day.items())  # [(date, max_concurrent_that_day), ...]
+        # Cap to a reasonable length for rendering (daily slices).
+        if len(series) > 800:
+            step = max(1, len(series) // 800)
+            series = series[::step]
+
+    def _top_occurrences(day_series, n=5):
+        """Return the (date, concurrency) top-n dates by concurrency."""
+        top = sorted(day_series, key=lambda x: (-x[1], x[0]))[:n]
+        return top
+
+    return {
+        "total": total,
+        "max_concurrent": max_concurrent,
+        "crowded_moments": crowded_moments,
+        "series": series,                       # [(date, concurrent_sequences)]
+        "top_dates": _top_occurrences(series),
+        "longest": longest,
+        "longest_author": longest_author,
+        "most_sequences_author": most_sequences_author,
+        "today": today,
+    }

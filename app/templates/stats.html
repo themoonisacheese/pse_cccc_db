@@ -41,6 +41,84 @@
     </div>
     {% endif %}
 
+    {# ── Author sequences: chains running at once ── #}
+    {% if has_author_sequences and seq_stats %}
+    <div class="stats-section">
+        <h2>Author Sequences</h2>
+        <p class="stats-desc">Setter-revealed chains, and how often several were running at the same time.</p>
+
+        <div class="stat-cards">
+            <div class="stat-card">
+                <div class="stat-value">{{ "{:,}".format(seq_stats.total) }}</div>
+                <div class="stat-label">Author Sequences</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ seq_stats.max_concurrent }}</div>
+                <div class="stat-label">Most Concurrent (at once)</div>
+            </div>
+            {% if seq_stats.longest_author %}
+            <div class="stat-card">
+                <div class="stat-value">{{ "{:,}".format(seq_stats.longest_author.days) }}d</div>
+                <div class="stat-label">Longest Sequence ({{ seq_stats.longest_author.author }})</div>
+            </div>
+            {% endif %}
+            {% if seq_stats.most_sequences_author %}
+            <div class="stat-card">
+                <div class="stat-value">{{ seq_stats.most_sequences_author.count }}</div>
+                <div class="stat-label">Most Sequences ({{ seq_stats.most_sequences_author.author }})</div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if seq_stats.longest %}
+        <div class="records-grid" style="margin-bottom:1.5rem">
+            <div class="record-card">
+                <div class="record-label">Longest Sequence</div>
+                <div class="record-value">
+                    {% if seq_stats.longest.name %}
+                        <a href="/sequences/{{ seq_stats.longest.id }}">{{ seq_stats.longest.name }}</a>
+                    {% else %}
+                        <a href="/sequences/{{ seq_stats.longest.id }}">Unnamed sequence</a>
+                    {% endif %}
+                </div>
+                <div class="record-meta">
+                    by {{ seq_stats.longest.author }} · {{ seq_stats.longest.clue_count }} clues ·
+                    {{ seq_stats.longest.start }} → {{ seq_stats.longest.end }}
+                    ({{ "{:,}".format(seq_stats.longest.days) }} days)
+                </div>
+            </div>
+            {% if seq_stats.top_dates %}
+            <div class="record-card">
+                <div class="record-label">Busiest for Concurrent Runs</div>
+                <div class="record-value">
+                    {{ seq_stats.top_dates[0][1] }} sequences running at once
+                </div>
+                <div class="record-meta">
+                    {% for d, cnt in seq_stats.top_dates[:3] %}
+                        {{ d }} ({{ cnt }}){% if not loop.last %} · {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if seq_stats.series %}
+        <div class="bar-chart">
+            {% for d, cnt in seq_stats.series %}
+            <div class="bar-row" title="{{ d }}: {{ cnt }} sequences running at once">
+                <span class="bar-label">{{ d }}</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width: {{ (cnt / seq_stats.max_concurrent * 100) | round(1) }}%"></div>
+                </div>
+                <span class="bar-count">{{ cnt }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {# ── Leaderboard with period filter ── #}
     <div class="stats-section">
         <div class="leaderboard-header">
