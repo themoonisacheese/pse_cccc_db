@@ -270,6 +270,16 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
 .bar-fill { background: var(--accent); height: 100%; border-radius: 4px; transition: width 0.3s; }
 .bar-count { font-family: var(--mono); font-size: 0.8rem; color: var(--fg); min-width: 30px; }
 
+/* ── Line chart (SVG) ────────────────── */
+.line-chart { width: 100%; height: auto; display: block; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: var(--radius); }
+.chart-grid { stroke: var(--border); stroke-width: 1; }
+.chart-axis { stroke: var(--fg-dim); stroke-width: 1.5; }
+.chart-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart-area { fill: var(--accent); opacity: 0.12; }
+.chart-dot { fill: var(--accent); }
+.chart-xlabel, .chart-ylabel { fill: var(--fg-dim); font-family: var(--mono); font-size: 11px; }
+.line-chart:hover .chart-line { stroke: var(--accent-hover); }
+
 .records-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .record-card {
     background: var(--bg-card);
