@@ -764,6 +764,16 @@ async def stats_page(request: Request, period: str = "all"):
 
         seq_stats = _author_sequence_stats(author_seq_rows)
 
+    # Pre-build Chart.js series (plain JSON-safe structures) so the template
+    # doesn't have to wrestle with tuple indexing inside Jinja.
+    per_month_labels = [r[0] for r in per_month] if per_month else []
+    per_month_data = [r[1] for r in per_month] if per_month else []
+    seq_chart_labels = []
+    seq_chart_data = []
+    if seq_stats and seq_stats.get("series"):
+        seq_chart_labels = [str(d) for d, _c in seq_stats["series"]]
+        seq_chart_data = [c for _d, c in seq_stats["series"]]
+
     return templates.TemplateResponse(
         "stats.html",
         {
@@ -787,6 +797,10 @@ async def stats_page(request: Request, period: str = "all"):
             "nemeses": nemeses,
             "per_month": per_month,
             "max_monthly": max_monthly,
+            "per_month_labels": per_month_labels,
+            "per_month_data": per_month_data,
+            "seq_chart_labels": seq_chart_labels,
+            "seq_chart_data": seq_chart_data,
             "seq_stats": seq_stats,
             "has_author_sequences": bool(seq_stats and (seq_stats["total"] or seq_stats["crowded"])),
         },

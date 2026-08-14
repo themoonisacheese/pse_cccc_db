@@ -2,48 +2,6 @@
 {% block title %}Stats — CCCC DB{% endblock %}
 {% block content %}
 
-{# ── Reusable SVG line chart ── #}
-{% macro line_chart(series, width=900, height=240, pad_l=48, pad_r=16, pad_t=16, pad_b=34) %}
-{%- set n = series | length -%}
-{%- set W = width - pad_l - pad_r -%}
-{%- set H = height - pad_t - pad_b -%}
-{%- set maxy = (series | map(attribute=1) | max) -%}
-{%- set yscale = maxy if maxy and maxy > 0 else 1 -%}
-{%- set step = (n - 1) if n > 1 else 1 -%}
-{%- set xs = [] -%}
-{%- set ys = [] -%}
-{%- for i in range(n) -%}
-    {%- set _ = xs.append(pad_l + (i * W / step)) -%}
-    {%- set _ = ys.append(pad_t + H * (1 - (series[i][1] | int) / yscale)) -%}
-{%- endfor -%}
-{%- set poly_pts = [] -%}
-{%- for i in range(n) -%}
-    {%- set _ = poly_pts.append('%.1f,%.1f' | format(xs[i], ys[i])) -%}
-{%- endfor -%}
-{%- set area_pts = (pad_l ~ ',' ~ (pad_t + H)) ~ ' ' ~ (poly_pts | join(' ')) ~ ' ' ~ ((pad_l + W) ~ ',' ~ (pad_t + H)) -%}
-<svg viewBox="0 0 {{ width }} {{ height }}" class="line-chart" role="img">
-    {%- for g in range(4) -%}
-    <line x1="{{ pad_l }}" y1="{{ pad_t + H * g / 3 }}" x2="{{ pad_l + W }}" y2="{{ pad_t + H * g / 3 }}" class="chart-grid"/>
-    {%- endfor -%}
-    <polygon points="{{ area_pts }}" class="chart-area"/>
-    <polyline points="{{ poly_pts | join(' ') }}" class="chart-line"/>
-    {%- for i in range(n) -%}
-    <circle cx="{{ xs[i] }}" cy="{{ ys[i] }}" r="{{ 3 if n <= 300 else 0 }}" class="chart-dot">
-        <title>{{ series[i][0] }}: {{ series[i][1] }}</title>
-    </circle>
-    {%- endfor -%}
-    <line x1="{{ pad_l }}" y1="{{ pad_t + H }}" x2="{{ pad_l + W }}" y2="{{ pad_t + H }}" class="chart-axis"/>
-    {%- set tstep = ([n // 9, 1] | max) -%}
-    {%- for i in range(n) -%}
-        {%- if i % tstep == 0 or i == (n - 1) -%}
-        <text x="{{ xs[i] }}" y="{{ pad_t + H + 18 }}" class="chart-xlabel">{{ series[i][0] }}</text>
-        {%- endif -%}
-    {%- endfor -%}
-    <text x="{{ pad_l - 8 }}" y="{{ pad_t + H + 3 }}" text-anchor="end" class="chart-ylabel">0</text>
-    <text x="{{ pad_l - 8 }}" y="{{ pad_t + 4 }}" text-anchor="end" class="chart-ylabel">{{ maxy }}</text>
-</svg>
-{% endmacro %}
-
 <div class="stats-page">
     <h1>Statistics</h1>
 
@@ -70,7 +28,7 @@
     {% if per_month %}
     <div class="stats-section">
         <h2>Clues per Month</h2>
-        {{ line_chart(per_month) }}
+        <div class="chart-wrap"><canvas id="monthly-chart"></canvas></div>
     </div>
     {% endif %}
 
@@ -137,7 +95,7 @@
         {% endif %}
 
         {% if seq_stats.series %}
-        {{ line_chart(seq_stats.series) }}
+        <div class="chart-wrap"><canvas id="sequence-chart"></canvas></div>
         {% endif %}
     </div>
     {% endif %}
@@ -301,4 +259,85 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    if (typeof Chart === "undefined") return;
+
+    const css = getComputedStyle(document.body);
+    const fg = css.getPropertyValue("--fg") || "#d7dae2";
+    const grid = css.getPropertyValue("--border") || "rgba(128,128,128,0.15)";
+    const accent = css.getPropertyValue("--accent") || "#4cc9f0";
+
+    const baseOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: css.getPropertyValue("--panel") || "#1f1f2e",
+                titleColor: fg,
+                bodyColor: fg,
+                borderColor: grid,
+                borderWidth: 1,
+            },
+        },
+        scales: {
+            x: {
+                grid: { color: grid },
+                ticks: { color: fg, maxTicksLimit: 10, maxRotation: 45 },
+            },
+            y: {
+                beginAtZero: true,
+                ticks: { color: fg, precision: 0 },
+                grid: { color: grid },
+            },
+        },
+    };
+
+    {% if per_month %}
+    new Chart(document.getElementById("monthly-chart"), {
+        type: "line",
+        data: {
+            labels: {{ per_month_labels | tojson }},
+            datasets: [{
+                label: "Clues",
+                data: {{ per_month_data | tojson }},
+                borderColor: accent,
+                backgroundColor: accent + "33",
+                fill: true,
+                tension: 0.25,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+            }],
+        },
+        options: baseOpts,
+    });
+    {% endif %}
+
+    {% if seq_stats and seq_stats.series %}
+    new Chart(document.getElementById("sequence-chart"), {
+        type: "line",
+        data: {
+            labels: {{ seq_chart_labels | tojson }},
+            datasets: [{
+                label: "Running sequences",
+                data: {{ seq_chart_data | tojson }},
+                borderColor: accent,
+                backgroundColor: accent + "33",
+                fill: true,
+                tension: 0.25,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+            }],
+        },
+        options: baseOpts,
+    });
+    {% endif %}
+})();
+</script>
 {% endblock %}
