@@ -23,6 +23,7 @@ Exit codes: 0 = ok, 1 = error.
 import argparse
 import asyncio
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 # Ensure app is importable
@@ -49,29 +50,60 @@ async def backfill(dry_run: bool, limit: int | None) -> None:
 
     print(f"Found {len(clues):,} clues with a transcript link but no message_id.")
 
-    updated = 0
-    skipped = 0
-    for clue in clues:
-        link = clue.transcript_link
-        mid = extract_message_id(link)
-        if mid is None:
-            # Whole-day transcript (or malformed) — nothing to extract.
-            skipped += 1
-            continue
-
-        if dry_run:
-            print(f"  [dry-run] clue #{clue.legacy_number}: message_id={mid} ({link})")
-        else:
-            async with async_session() as session:
+    # message_ids already present in the DB (assigned by an earlier partial run,
+    # or by the live daemon) must not be re-assigned — the partial unique index
+    # forbids collisions with them too.
+    async with async_session() as session:
+        existing_ids = set(
+            (
                 await session.execute(
-                    Clue.__table__.update()
-                    .where(Clue.id == clue.id)
-                    .values(message_id=mid, source="ingest")
+                    select(Clue.message_id).where(Clue.message_id.isnot(None))
                 )
-                await session.commit()
-        updated += 1
+            ).scalars()
+        )
 
-    print(f"Done: {updated:,} message_ids extracted, {skipped:,} skipped (whole-day/no id).")
+    # Group candidates by their extractable message_id so we can detect
+    # collisions up front.  The partial unique index (ux_clues_message_id)
+    # forbids two clues sharing a message_id, so any duplicated id must be
+    # skipped (left NULL) rather than force-assigned.
+    by_id: dict[int, list[Clue]] = defaultdict(list)
+    no_id = 0
+    for clue in clues:
+        mid = extract_message_id(clue.transcript_link)
+        if mid is None:
+            no_id += 1  # whole-day transcript (or malformed)
+        else:
+            by_id[mid].append(clue)
+
+    duplicate_ids = {
+        mid
+        for mid, cs in by_id.items()
+        if len(cs) > 1 or mid in existing_ids
+    }
+    for mid in sorted(duplicate_ids):
+        clue_nums = ", ".join(f"#{c.legacy_number}" for c in by_id[mid])
+        reason = "already in DB" if mid in existing_ids else "shared by multiple clues"
+        print(f"  [dup] message_id={mid} {reason} ({clue_nums}) — skipped (left NULL)")
+
+    updated = 0
+    skipped = no_id + sum(len(by_id[mid]) for mid in duplicate_ids)
+    for mid, cs in by_id.items():
+        if mid in duplicate_ids:
+            continue
+        for clue in cs:
+            if dry_run:
+                print(f"  [dry-run] clue #{clue.legacy_number}: message_id={mid} ({clue.transcript_link})")
+            else:
+                async with async_session() as session:
+                    await session.execute(
+                        Clue.__table__.update()
+                        .where(Clue.id == clue.id)
+                        .values(message_id=mid, source="ingest")
+                    )
+                    await session.commit()
+            updated += 1
+
+    print(f"Done: {updated:,} message_ids extracted, {skipped:,} skipped (whole-day/no id or duplicate).")
     await engine.dispose()
 
 
