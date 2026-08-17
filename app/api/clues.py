@@ -311,10 +311,8 @@ async def delete_clue(
     clue_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a clue. Requires admin privileges."""
+    """Delete a clue. Requires editor privileges."""
     user = _check_write_perm(request)
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin privileges required to delete")
     result = await db.execute(select(Clue).where(Clue.id == clue_id))
     clue = result.scalar_one_or_none()
     if not clue:

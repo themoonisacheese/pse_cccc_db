@@ -50,6 +50,9 @@
         <div class="form-actions">
             <button type="submit" class="btn">Save Changes</button>
             <a href="/clue/{{ clue.id }}" class="btn btn-outline">Cancel</a>
+            {% if user.is_editor %}
+            <button type="button" id="delete-clue" class="btn btn-danger" style="margin-left:auto;">Delete Clue</button>
+            {% endif %}
         </div>
     </form>
     <div id="form-result"></div>
@@ -81,5 +84,21 @@ document.getElementById('clue-form').addEventListener('submit', async (e) => {
             `<p class="error">Error: ${err.detail || resp.statusText}</p>`;
     }
 });
+
+{% if user.is_editor %}
+document.getElementById('delete-clue').addEventListener('click', async () => {
+    if (!confirm('Delete clue #{{ clue.legacy_number }}? This permanently removes it from the database and cannot be undone.')) {
+        return;
+    }
+    const resp = await fetch('/api/clues/{{ clue.id }}', { method: 'DELETE' });
+    if (resp.ok) {
+        window.location.href = '/';
+    } else {
+        const err = await resp.json().catch(() => ({}));
+        document.getElementById('form-result').innerHTML =
+            `<p class="error">Error: ${err.detail || resp.statusText}</p>`;
+    }
+});
+{% endif %}
 </script>
 {% endblock %}
