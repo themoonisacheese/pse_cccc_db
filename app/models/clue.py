@@ -32,6 +32,7 @@ class User(Base):
     is_room_owner: Mapped[bool] = mapped_column(Boolean, default=False)
     is_editor: Mapped[bool] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_bot: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -78,6 +79,12 @@ class Clue(Base):
     clues_by_solver_so_far: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     transcript_link: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
+
+    # ── Ingest tracking (see migration_008) ──
+    # SE chat message ID this clue came from. NULL for legacy/manual entries.
+    message_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)
+    # 'ingest' (bot-detected in chat) vs 'manual' (editor form).
+    source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
 
     # Track who entered / last edited the clue
     entered_by_user_id: Mapped[int | None] = mapped_column(
@@ -131,4 +138,21 @@ class ClueEditHistory(Base):
     new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     edited_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class IngestState(Base):
+    """Single-row watermark for the chat ingest daemon (see migration_008).
+
+    Persists the last-seen SE chat message ID so the daemon can do a
+    lightweight catch-up after a disconnect or restart.  Kept in the DB
+    (rather than a local file) so it survives container rebuilds.
+    """
+
+    __tablename__ = "ingest_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # always 1
+    watermark: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

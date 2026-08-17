@@ -27,6 +27,9 @@ class ClueBase(BaseModel):
     clues_by_solver_so_far: Optional[int] = None
     transcript_link: Optional[str] = None
     legacy_number: Optional[int] = None
+    # Ingest tracking
+    message_id: Optional[int] = None
+    source: str = "manual"
 
 
 class ClueCreate(ClueBase):
@@ -47,6 +50,9 @@ class ClueUpdate(BaseModel):
     clues_by_solver_so_far: Optional[int] = None
     transcript_link: Optional[str] = None
     legacy_number: Optional[int] = None
+    # Ingest tracking
+    message_id: Optional[int] = None
+    source: Optional[str] = None
 
 
 class ClueOut(ClueBase):

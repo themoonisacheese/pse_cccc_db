@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.clue import Clue, ClueEditHistory
+from app.services.clue_service import ingest_clue as service_ingest_clue, update_clue as service_update_clue
 from app.schemas.clue import (
     ClueCreate,
     ClueUpdate,
