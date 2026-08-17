@@ -142,17 +142,54 @@ The app uses a layered approach to determine if a logged-in user is a room owner
 
 Non-moderator room owners who aren't in the allowlist will only be detected if the chat API is functional (bot credentials configured).
 
-## Bot Integration (Future)
+## Chat Ingest Bot
 
-The REST API is designed to be used by a chat-watching bot:
+A chat-watching daemon automatically adds CCCC clues to the database as they are
+posted in the CCCC room. It runs as its own process (independent of the web app)
+so it can be restarted/observed separately.
 
-- **Create a clue**: `POST /api/clues` with JSON body (requires an API token or session cookie)
-- **Search clues**: `GET /api/clues?q=...&author=...&page=1`
-- **Parse a transcript link**: `GET /api/transcript/parse?url=...`
+```
+docker compose up -d ingest
+```
 
-The bot can use the API independently of the web UI. For bot authentication,
-create a user manually in the database with `is_admin=true` and use a session
-cookie or a future API token mechanism.
+### How it works
+
+1. The daemon connects to the CCCC chat room using the bot account
+   (`SE_BOT_EMAIL` / `SE_BOT_PASSWORD`) via the [`sechat`](https://github.com/nvua/sechat) library.
+2. On every message, it runs the **accept rule** (`app/services/ingest/accept.py`):
+   - **Accept** — message starts with a `CCCC` header **AND** ends with an enumeration
+     (e.g. `CCCC A clue (10)` or `CCCC Something stacked (4, 8)`). Ingested immediately.
+   - **Near-miss** — exactly one of (header, enumeration) present. Logged for human review.
+   - **Discard** — neither present. Silently dropped (avoids noise).
+3. Deduplication is handled by the partial unique index on `clues.message_id`.
+4. The bot's own messages are ignored (filtered by author id).
+
+### Human correction
+
+If a clue was mis-formatted (or missed entirely), a human can still insert it mid-chain
+through the web UI. The insert service bumps the `legacy_number` of everything after
+the insertion point and **recomputes the author/solver pills** for the shifted clues
+so the sequence counts stay correct.
+
+### Message ID backfill
+
+Existing clues imported from the spreadsheet carry a `transcript_link` but no
+`message_id`. `scripts/backfill_message_ids.py` walks every such clue, extracts the
+message ID from the link, and stores it — so the dedup index protects them too.
+Whole-day transcript links (e.g. `/transcript/{room}/2026/08/18`) are skipped.
+
+```
+python scripts/backfill_message_ids.py --dry-run   # preview
+python scripts/backfill_message_ids.py             # apply
+```
+
+### Notes
+
+- The accept rule (header + enumeration) is considered strong enough that pinning
+  on the room starboard is not used. If clues are found to be missed, that decision
+  can be revisited.
+- Solution/validation detection (part 2) is future work; ingest is strictly limited
+  to adding clues.
 
 ## Project Structure
 
@@ -172,6 +209,12 @@ pse_cccc_db/
 │   ├── schemas/
 │   │   └── clue.py           # Pydantic schemas
 │   ├── services/
+│   │   ├── clue_service.py       # Shared clue write path (API + ingest daemon)
+│   │   ├── ingest/
+│   │   │   ├── accept.py         # CCCC header + enumeration accept rule
+│   │   │   ├── state.py          # DB-persisted watermark (recovery only)
+│   │   │   ├── daemon.py         # sechat message-callback watcher
+│   │   │   └── __main__.py       # `python -m app.services.ingest` entrypoint
 │   │   ├── transcript_parser.py  # Transcript link → clue data (RSS + events API)
 │   │   └── se_chat_client.py     # Authenticated SE Chat client (sechat + cookie cache)
 │   ├── static/

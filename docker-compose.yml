@@ -34,5 +34,26 @@ services:
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
       "
 
+  ingest:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cccc}:${POSTGRES_PASSWORD:-cccc}@db:5432/${POSTGRES_DB:-cccc}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-cccc}:${POSTGRES_PASSWORD:-cccc}@db:5432/${POSTGRES_DB:-cccc}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    # The ingest daemon watches the CCCC chat room and writes clues to the DB.
+    # It runs as its own long-lived process so it can be restarted/observed
+    # independently of the web app.  Requires SE_BOT_* credentials (in .env).
+    command: >
+      sh -c "
+        python scripts/backfill_message_ids.py &&
+        python -m app.services.ingest
+      "
+    restart: unless-stopped
+
 volumes:
   pgdata:

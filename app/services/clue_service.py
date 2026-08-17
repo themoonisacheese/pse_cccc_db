@@ -13,6 +13,45 @@ from app.models.clue import Clue, ClueEditHistory, User
 logger = logging.getLogger(__name__)
 
 
+async def _recompute_pills(db: AsyncSession, from_legacy: int) -> None:
+    """Recompute the author/solver pills for every clue at or after a position.
+
+    The pills (`clues_by_author_so_far` / `clues_by_solver_so_far`) are defined
+    as "count of clues by this author/solver with legacy_number <= this clue's
+    legacy_number".  When a clue is inserted mid-chain, every clue that gets
+    shifted up (legacy_number >= insertion point) can have its pill change —
+    e.g. if the inserted clue is by the same author, every later clue by that
+    author gains one.  This recomputes them from scratch for correctness.
+
+    Mid-chain insertions are rare (a human fixing a missed/mis-formatted clue),
+    so recomputing per-clue is acceptable at ~10k rows.
+    """
+    result = await db.execute(
+        select(Clue).where(Clue.legacy_number >= from_legacy)
+    )
+    shifted = result.scalars().all()
+    for clue in shifted:
+        clue.clues_by_author_so_far = (
+            await db.execute(
+                select(func.count(Clue.id)).where(
+                    Clue.author == clue.author,
+                    Clue.legacy_number <= clue.legacy_number,
+                )
+            )
+        ).scalar()
+        if clue.solver:
+            clue.clues_by_solver_so_far = (
+                await db.execute(
+                    select(func.count(Clue.id)).where(
+                        Clue.solver == clue.solver,
+                        Clue.legacy_number <= clue.legacy_number,
+                    )
+                )
+            ).scalar()
+        else:
+            clue.clues_by_solver_so_far = None
+
+
 async def ingest_clue(
     db: AsyncSession,
     *,
@@ -67,13 +106,14 @@ async def ingest_clue(
             .values(legacy_number=Clue.legacy_number + 1)
         )
         clue.legacy_number = legacy_number
+        # The shift changed legacy_numbers, so every clue that moved needs its
+        # author/solver pill recomputed (it may have gained entries).
+        await _recompute_pills(db, legacy_number)
     else:
         max_num = (
             await db.execute(select(func.max(Clue.legacy_number)))
         ).scalar()
         clue.legacy_number = (max_num or 0) + 1
-
-    # ── Author / solver pills ────────────────────────────────
     clue.clues_by_author_so_far = (
         await db.execute(
             select(func.count(Clue.id)).where(
