@@ -37,7 +37,7 @@ class ClueCandidate(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     clue_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("clues.id", ondelete="CASCADE"), index=True
+        Integer, ForeignKey("clues.id", ondelete="CASCADE")
     )
     solution: Mapped[str] = mapped_column(Text)
     solver: Mapped[str | None] = mapped_column(String(255), nullable=True)

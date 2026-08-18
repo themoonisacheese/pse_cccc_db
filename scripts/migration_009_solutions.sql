@@ -6,7 +6,7 @@
 --   * clue_candidates — one row per proposed solution for a clue.  This is
 --     BOTH the editor review queue AND the calibration source (approved /
 --     highest-unapproved confidence scores are read straight off these rows
---     at runtime; there is deliberately no separate calibration table).
+--     at runtime (there is deliberately no separate calibration table).
 --       - confidence : the pipeline's confidence score for this candidate.
 --       - signals    : JSONB of the deterministic signal badges that produced
 --                      the score, e.g. {"hash_verified":true,"enum_match":true}.
@@ -14,7 +14,7 @@
 --       - source_message_id : the SE chat message the candidate came from.
 --   * pending_llm — a DB-backed retry queue for LLM-required work (salt
 --     extraction, wordplay-only extraction).  Survives container restarts so
---     an LLM outage never loses work; the worker drains it with backoff.
+--     an LLM outage never loses work (the worker drains it with backoff).
 --
 -- NOTE: the project's migration runner splits statements on the semicolon
 -- character and does not understand comments, so no comment here may contain
