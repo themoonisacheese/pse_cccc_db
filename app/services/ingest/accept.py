@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from bs4 import BeautifulSoup
+
 # A CCCC header, allowing the common variants:
 #   "CCCC", "**CCCC**", "CCCC:", "**CCCC:**", "CCCC —", "CCCC (link)", etc.
 # The header must appear at the very start of the message (after optional
@@ -53,6 +55,18 @@ def strip_header(text: str) -> str:
     return RE_HEADER.sub("", text).strip()
 
 
+def strip_html(text: str) -> str:
+    """Strip HTML tags from a chat message, returning plain text.
+
+    sechat delivers message content as raw HTML (e.g. ``<b>CCCC</b>: ...``),
+    not plain text.  We strip tags here so the accept rule and the window
+    buffer both operate on clean text.
+    """
+    if not text:
+        return text
+    return BeautifulSoup(text, "html.parser").get_text()
+
+
 def extract_enumeration(text: str) -> Optional[str]:
     """Return the trailing enumeration (including parens) if present, else None."""
     m = RE_ENUMERATION.search(text)
@@ -62,8 +76,9 @@ def extract_enumeration(text: str) -> Optional[str]:
 def decide(text: str) -> AcceptDecision:
     """Classify a raw chat message against the accept rule.
 
-    Note: the message content from the sechat callback is plain text (HTML
-    already stripped), so we operate on that directly.
+    Note: the message content from the sechat callback is raw HTML (e.g.
+    ``<b>CCCC</b>: ...``).  The daemon strips HTML via `strip_html` before
+    calling `decide`, so we operate on plain text here.
     """
     if not text:
         return AcceptDecision(AcceptResult.DISCARD, False, False)

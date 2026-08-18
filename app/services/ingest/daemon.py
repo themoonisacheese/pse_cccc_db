@@ -27,7 +27,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.db.session import async_session
 from app.models.clue import Clue, User
-from app.services.ingest.accept import AcceptResult, decide
+from app.services.ingest.accept import AcceptResult, decide, strip_html
 from app.services.ingest import state as ingest_state
 from app.services.ingest.window import from_event
 from app.services.ingest.window_manager import WindowManager
@@ -161,6 +161,9 @@ class IngestDaemon:
             return
         if self._loop is None or not self._loop.is_running():
             return
+        # sechat delivers content as raw HTML; strip tags once so both the
+        # window buffer and the accept rule see clean plain text.
+        event = event._replace(content=strip_html(getattr(event, "content", "") or ""))
         # Append to the open window (cheap, structured).
         self.window_manager.on_message(from_event(event))
         asyncio.run_coroutine_threadsafe(_ingest_message(event, self.window_manager), self._loop)

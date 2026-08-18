@@ -7,6 +7,7 @@ from app.services.ingest.accept import (
     decide,
     extract_enumeration,
     strip_header,
+    strip_html,
 )
 
 
@@ -28,6 +29,21 @@ def test_accept_bold_header():
     d = decide("**CCCC**: A clue with bold header (6)")
     assert d.result is AcceptResult.ACCEPT
     assert d.clue_text == "A clue with bold header (6)"
+
+
+def test_accept_html_bold_header():
+    # sechat delivers content as raw HTML, e.g. <b>CCCC</b>: ...
+    d = decide(strip_html("<b>CCCC</b>: About chat and the French coteries (7)"))
+    assert d.result is AcceptResult.ACCEPT
+    assert d.has_header
+    assert d.has_enumeration
+    assert d.clue_text == "About chat and the French coteries (7)"
+
+
+def test_strip_html():
+    assert strip_html("<b>CCCC</b>: a clue <i>here</i> (4)") == "CCCC: a clue here (4)"
+    assert strip_html("plain text (4)") == "plain text (4)"
+    assert strip_html("") == ""
 
 
 def test_accept_bold_colon_variant():
