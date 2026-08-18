@@ -21,7 +21,7 @@ weak tiebreaker):
     solver_match    ~ 0.7  (solver identity + enumeration match)
     reply_to_clue   ~ 0.6  (solver answered the clue directly)
     enum_match      ~ 0.4  (word-lengths match the clue enumeration)
-    llm_extract     ~ 0.3  (LLM reconstruction, wordplay-only)
+    classifier      ~ 0.3  (LLM reconstruction, wordplay-only)
 """
 
 from __future__ import annotations

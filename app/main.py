@@ -66,10 +66,10 @@ templates.env.filters["rel_date"] = _relative_date
 
 
 # Display labels for candidate signal badges. Keys are the raw signal names
-# stored on the candidate (e.g. "llm_extract"); values are what we show in
+# stored on the candidate (e.g. "classifier"); values are what we show in
 # the review UI. Anything not listed falls back to the raw key.
 SIGNAL_LABELS = {
-    "llm_extract": "classifier",
+    "classifier": "classifier",
     "hash_verified": "hash verified",
     "author_reply": "author reply",
     "solver_match": "solver match",
@@ -121,7 +121,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         # Run all migrations in order
-        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql", "migration_007_drop_answer_count.sql", "migration_008_ingest.sql", "migration_009_solutions.sql"]:
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql", "migration_007_drop_answer_count.sql", "migration_008_ingest.sql", "migration_009_solutions.sql", "migration_010_rename_llm_extract.sql"]:
             migration_path = BASE_DIR.parent / "scripts" / migration_file
             if migration_path.exists():
                 migration_sql = migration_path.read_text()

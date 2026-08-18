@@ -146,7 +146,7 @@ class LlmWorker:
                             solver=row.payload.get("solver"),
                             explanation=row.payload.get("content"),
                             confidence=0.3,
-                            signals={"llm_extract": True},
+                            signals={"classifier": True},
                             source_message_id=row.payload.get("source_message_id"),
                         )
                     )
