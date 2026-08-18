@@ -10,4 +10,7 @@ python-multipart==0.0.12
 httpx==0.27.2
 itsdangerous==2.2.0
 beautifulsoup4==4.12.3
-sechat>=1.1.2
+# sechat is vendored at ./sechat (upstream unmaintained). These are its
+# runtime dependencies, pinned here so the vendored copy works without pip.
+requests==2.32.3
+websocket-client==1.8.0

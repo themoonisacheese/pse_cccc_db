@@ -125,6 +125,8 @@ GET /api/clues?author=Jafe&order_by=clue_date&order_dir=desc&page=1&page_size=20
 
 Chat pages on `chat.stackexchange.com` are behind Cloudflare. To access them, the app uses a bot account with email+password authentication via the [`sechat`](https://github.com/nvua/sechat) library, which caches session cookies to avoid repeated logins (and captcha challenges).
 
+> **Note:** `sechat` is vendored at `./sechat` because the upstream project is no longer maintained. We applied a local fix so a malformed (non-string) websocket frame can't kill the room-listener thread (see `tests/test_vendored_sechat.py`). Its runtime deps (`requests`, `websocket-client`) are pinned in `requirements.txt`.
+
 1. Create a SE account dedicated to bot use (or repurpose an existing one).
 2. Set `SE_BOT_EMAIL` and `SE_BOT_PASSWORD` in `.env`.
 3. The bot authenticates once (or loads cached cookies), then uses the authenticated session to:
