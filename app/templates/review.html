@@ -54,7 +54,7 @@
                         <div class="candidate-badges">
                             <span class="meta-tag conf-badge" title="Model confidence">conf {{ '%.0f' | format(cand.confidence * 100) }}%</span>
                             {% for sig, val in cand.signals.items() if val %}
-                            <span class="meta-tag signal-badge">{{ sig }}</span>
+                            <span class="meta-tag signal-badge">{{ sig | signal_label }}</span>
                             {% endfor %}
                         </div>
                     </div>

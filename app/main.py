@@ -65,6 +65,26 @@ def _relative_date(d):
 templates.env.filters["rel_date"] = _relative_date
 
 
+# Display labels for candidate signal badges. Keys are the raw signal names
+# stored on the candidate (e.g. "llm_extract"); values are what we show in
+# the review UI. Anything not listed falls back to the raw key.
+SIGNAL_LABELS = {
+    "llm_extract": "classifier",
+    "hash_verified": "hash verified",
+    "author_reply": "author reply",
+    "solver_match": "solver match",
+    "reply_to_clue": "reply to clue",
+    "enum_match": "enum match",
+}
+
+
+def _signal_label(sig: str) -> str:
+    return SIGNAL_LABELS.get(sig, sig)
+
+
+templates.env.filters["signal_label"] = _signal_label
+
+
 def _split_sql(sql: str) -> list[str]:
     """Split SQL into individual statements, respecting $$ dollar-quoting."""
     statements = []
