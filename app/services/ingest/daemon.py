@@ -56,7 +56,36 @@ async def _get_or_create_bot_user(db) -> User:
     return user
 
 
-async def _ingest_message(event, window_manager: WindowManager | None = None) -> None:
+# Milestones the bot announces in chat when an author reaches them.
+MILESTONE_CLUE_NUMBERS = {1, 50}
+
+
+def _milestone_message(clue: Clue, author_id: int | None) -> str | None:
+    """Return a chat message to post for a milestone clue, else None.
+
+    `clues_by_author_so_far` is the "Nth clue by this author" pill computed
+    by `ingest_clue` — the exact same metric the admin Clue Milestones page
+    uses.  When it lands on a milestone (1st or 50th), we congratulate the
+    author in the room.
+    """
+    n = clue.clues_by_author_so_far
+    if n not in MILESTONE_CLUE_NUMBERS:
+        return None
+    if n == 1:
+        text = f"🎉 @{clue.author} just posted their very first clue! (#{clue.legacy_number})"
+    else:
+        text = f"🎉 @{clue.author} just posted their 50th clue! (#{clue.legacy_number})"
+    # Reply to the author so they get a ping.
+    if author_id is not None:
+        return f":{author_id} {text}"
+    return text
+
+
+async def _ingest_message(
+    event,
+    window_manager: WindowManager | None = None,
+    room=None,
+) -> None:
     """Run the accept rule and, if accepted, ingest the clue."""
     content = getattr(event, "content", "") or ""
     decision = decide(content)
@@ -102,7 +131,7 @@ async def _ingest_message(event, window_manager: WindowManager | None = None) ->
             window_manager.on_clue(message_id, author_id)
 
         actor = await _get_or_create_bot_user(db)
-        await ingest_clue(
+        clue = await ingest_clue(
             db,
             actor=actor,
             clue_text=clue_text,
@@ -118,6 +147,17 @@ async def _ingest_message(event, window_manager: WindowManager | None = None) ->
         # Advance the watermark.
         if message_id is not None:
             await ingest_state.set_watermark(db, message_id)
+
+    # Announce milestones in chat.  sechat's `send` is sync + network-bound,
+    # so run it off the loop (fire-and-forget; never blocks ingest).
+    if room is not None:
+        msg = _milestone_message(clue, author_id)
+        if msg is not None:
+            try:
+                await asyncio.to_thread(room.send, msg)
+                logger.info("Announced milestone for %s (clue #%s)", author, clue.legacy_number)
+            except Exception:  # noqa: BLE001 — announcement must never break ingest
+                logger.exception("Failed to post milestone announcement for %s", author)
 
 
 class IngestDaemon:
@@ -166,7 +206,9 @@ class IngestDaemon:
         event = event._replace(content=strip_html(getattr(event, "content", "") or ""))
         # Append to the open window (cheap, structured).
         self.window_manager.on_message(from_event(event))
-        asyncio.run_coroutine_threadsafe(_ingest_message(event, self.window_manager), self._loop)
+        asyncio.run_coroutine_threadsafe(
+            _ingest_message(event, self.window_manager, self.room), self._loop
+        )
 
     async def _connect(self):
         """Log in and join the room (sechat is sync, so run in a thread)."""
