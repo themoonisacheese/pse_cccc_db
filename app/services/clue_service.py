@@ -3,6 +3,7 @@ and the ingest daemon (bot). Avoids coupling the daemon to FastAPI's
 request/response/auth layer."""
 
 import logging
+from datetime import date
 from typing import Optional
 
 from sqlalchemy import select, func
@@ -84,9 +85,12 @@ async def ingest_clue(
         transcript_link=transcript_link,
         message_id=message_id,
         source=source,
+        # Ingested clues carry no date in the SE chat payload; default to
+        # today (the date the clue was ingested) unless the caller supplied one.
+        clue_date=extra_fields.pop("clue_date", None) or date.today(),
     )
 
-    # Set any extra fields the caller passed (e.g. one_word_answer_length, clue_date)
+    # Set any extra fields the caller passed (e.g. one_word_answer_length)
     for k, v in extra_fields.items():
         if hasattr(clue, k) and v is not None:
             setattr(clue, k, v)

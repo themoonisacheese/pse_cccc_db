@@ -25,29 +25,34 @@
             <p class="text-muted">Sorted by confidence. Approve the correct one, or reject the rest.</p>
             <div class="candidate-list">
                 {% for cand in candidates %}
-                <div class="candidate-row" id="candidate-{{ cand.id }}">
-                    <div class="candidate-main">
+                <div class="candidate-card" id="candidate-{{ cand.id }}">
+                    <div class="candidate-card-top">
                         <div class="candidate-solution">
-                            <strong>{{ cand.solution or '(wordplay — pending LLM)' }}</strong>
-                            <span class="meta-tag">conf {{ '%.2f' | format(cand.confidence) }}</span>
+                            <span class="candidate-rank">#{{ loop.index }}</span>
+                            <strong class="candidate-answer">{{ cand.solution or '(wordplay — pending LLM)' }}</strong>
+                        </div>
+                        <div class="candidate-badges">
+                            <span class="meta-tag conf-badge">conf {{ '%.0f' | format(cand.confidence * 100) }}%</span>
                             {% for sig, val in cand.signals.items() if val %}
                             <span class="meta-tag signal-badge">{{ sig }}</span>
                             {% endfor %}
                         </div>
-                        {% if cand.solver %}<p class="candidate-solver">Solver: {{ cand.solver }}</p>{% endif %}
-                        {% if cand.explanation %}<p class="candidate-explanation">{{ cand.explanation }}</p>{% endif %}
-                        {% if cand.source_message_id %}
-                        <a class="meta-tag" href="https://chat.stackexchange.com/transcript/message/{{ cand.source_message_id }}#{{ cand.source_message_id }}" target="_blank" rel="noopener">source msg #{{ cand.source_message_id }}</a>
-                        {% endif %}
                     </div>
+                    {% if cand.solver %}<p class="candidate-solver"><strong>Solver:</strong> {{ cand.solver }}</p>{% endif %}
+                    {% if cand.explanation %}<p class="candidate-explanation">{{ cand.explanation }}</p>{% endif %}
+                    {% if cand.source_message_id %}
+                    <a class="meta-tag" href="https://chat.stackexchange.com/transcript/message/{{ cand.source_message_id }}#{{ cand.source_message_id }}" target="_blank" rel="noopener">source msg #{{ cand.source_message_id }}</a>
+                    {% endif %}
                     <div class="candidate-actions">
-                        <button class="btn btn-small" hx-post="/api/review/candidates/{{ cand.id }}/approve"
-                            hx-swap="outerHTML" hx-target="#candidate-{{ cand.id }}">
-                            Approve
+                        <button class="btn btn-small btn-approve" hx-post="/api/review/candidates/{{ cand.id }}/approve"
+                            hx-swap="none"
+                            hx-on::after-request="if(event.detail.successful) window.location.href='/clue/{{ clue.id }}';">
+                            ✓ Approve
                         </button>
-                        <button class="btn btn-small btn-outline" hx-post="/api/review/candidates/{{ cand.id }}/reject"
-                            hx-swap="outerHTML" hx-target="#candidate-{{ cand.id }}">
-                            Reject
+                        <button class="btn btn-small btn-outline btn-reject" hx-post="/api/review/candidates/{{ cand.id }}/reject"
+                            hx-swap="none"
+                            hx-on::after-request="if(event.detail.successful) htmx.remove('#candidate-{{ cand.id }}');">
+                            ✕ Reject
                         </button>
                     </div>
                 </div>
