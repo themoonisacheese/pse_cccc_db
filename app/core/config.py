@@ -58,12 +58,40 @@ class Settings(BaseSettings):
     default_page_size: int = 50
     max_page_size: int = 500
 
+    # ── Solution Ingest (Stage 2) ───────────────────────────────
+    # LLM provider used for extraction (salt / wordplay-only answers).
+    # The model is an *extractor*, never asked to solve a clue cold.
+    llm_base_url: str = ""           # OpenAI-compatible base URL
+    llm_api_key: str = ""            # API key for the provider
+    llm_model: str = ""              # e.g. "deepseek-ai/DeepSeek-V3-0731" or DS4-flash
+    llm_max_retries: int = 5
+    llm_backoff_base: float = 2.0    # exponential backoff multiplier
+
+    # Auto-accept confidence threshold.  Default 0.0 => nothing auto-accepted;
+    # every candidate lands in the review queue until we calibrate the
+    # threshold from recorded approve/reject scores.
+    solution_auto_accept_threshold: float = 0.0
+
+    # Comma-separated SE user IDs whose messages are pure noise (e.g. RSS
+    # feed bots) and are dropped from windows before detection.
+    solution_noise_user_ids: str = ""
+
     @property
     def owner_id_list(self) -> List[int]:
         if not self.room_owner_ids.strip():
             return []
         return [
             int(x.strip()) for x in self.room_owner_ids.split(",") if x.strip()
+        ]
+
+    @property
+    def noise_user_id_list(self) -> List[int]:
+        if not self.solution_noise_user_ids.strip():
+            return []
+        return [
+            int(x.strip())
+            for x in self.solution_noise_user_ids.split(",")
+            if x.strip()
         ]
 
 

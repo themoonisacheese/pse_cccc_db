@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Review Clue #{{ clue.legacy_number }} — CCCC DB{% endblock %}
+{% block content %}
+<div class="clue-detail">
+    <div class="clue-detail-header">
+        <h1>Review — Clue #{{ clue.legacy_number }}</h1>
+        <a href="/clue/{{ clue.id }}" class="btn btn-small btn-outline">← Back to clue</a>
+    </div>
+
+    <div class="clue-detail-body">
+        <div class="detail-section">
+            <h3>Clue</h3>
+            <p class="clue-text-full">{{ clue.clue_text }}</p>
+            <p><strong>Author:</strong> {{ clue.author }}</p>
+            {% if clue.solution %}
+            <p><span class="meta-tag">Already solved: {{ clue.solution }}</span></p>
+            {% else %}
+            <p><span class="meta-tag">Not yet solved</span></p>
+            {% endif %}
+        </div>
+
+        {% if candidates %}
+        <div class="detail-section">
+            <h3>Candidate solutions ({{ candidates | length }})</h3>
+            <p class="text-muted">Sorted by confidence. Approve the correct one, or reject the rest.</p>
+            <div class="candidate-list">
+                {% for cand in candidates %}
+                <div class="candidate-row" id="candidate-{{ cand.id }}">
+                    <div class="candidate-main">
+                        <div class="candidate-solution">
+                            <strong>{{ cand.solution or '(wordplay — pending LLM)' }}</strong>
+                            <span class="meta-tag">conf {{ '%.2f' | format(cand.confidence) }}</span>
+                            {% for sig, val in cand.signals.items() if val %}
+                            <span class="meta-tag signal-badge">{{ sig }}</span>
+                            {% endfor %}
+                        </div>
+                        {% if cand.solver %}<p class="candidate-solver">Solver: {{ cand.solver }}</p>{% endif %}
+                        {% if cand.explanation %}<p class="candidate-explanation">{{ cand.explanation }}</p>{% endif %}
+                        {% if cand.source_message_id %}
+                        <a class="meta-tag" href="https://chat.stackexchange.com/transcript/message/{{ cand.source_message_id }}#{{ cand.source_message_id }}" target="_blank" rel="noopener">source msg #{{ cand.source_message_id }}</a>
+                        {% endif %}
+                    </div>
+                    <div class="candidate-actions">
+                        <button class="btn btn-small" hx-post="/api/review/candidates/{{ cand.id }}/approve"
+                            hx-swap="outerHTML" hx-target="#candidate-{{ cand.id }}">
+                            Approve
+                        </button>
+                        <button class="btn btn-small btn-outline" hx-post="/api/review/candidates/{{ cand.id }}/reject"
+                            hx-swap="outerHTML" hx-target="#candidate-{{ cand.id }}">
+                            Reject
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="detail-section">
+            <h3>Candidate solutions</h3>
+            <p class="text-muted">No candidates awaiting review for this clue.</p>
+        </div>
+        {% endif %}
+
+        {% if not clue.solution %}
+        <div class="detail-section">
+            <h3>Manual solve</h3>
+            <p class="text-muted">If all candidates were wrong and you have the answer, enter it directly.</p>
+            <form id="manual-solve-form" hx-post="/api/review/clues/{{ clue.id }}/manual-solve"
+                  hx-swap="none" hx-on::after-request="if(event.detail.successful) location.reload();">
+                <div class="form-group">
+                    <label>Solution</label>
+                    <input type="text" name="solution" required />
+                </div>
+                <div class="form-group">
+                    <label>Solver (optional)</label>
+                    <input type="text" name="solver" />
+                </div>
+                <div class="form-group">
+                    <label>Explanation (optional)</label>
+                    <textarea name="explanation" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-small">Save solution</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

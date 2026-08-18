@@ -17,6 +17,7 @@ from app.api.auth import get_current_user, router as auth_router
 from app.api.clues import router as clues_router
 from app.api.sequences import router as sequences_router
 from app.api.transcript import router as transcript_router
+from app.api.review import router as review_router
 from app.db.session import async_session, engine, Base
 
 settings = get_settings()
@@ -87,7 +88,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         # Run all migrations in order
-        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql", "migration_007_drop_answer_count.sql", "migration_008_ingest.sql"]:
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql", "migration_007_drop_answer_count.sql", "migration_008_ingest.sql", "migration_009_solutions.sql"]:
             migration_path = BASE_DIR.parent / "scripts" / migration_file
             if migration_path.exists():
                 migration_sql = migration_path.read_text()
@@ -153,6 +154,7 @@ app.include_router(sequences_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(transcript_router, prefix="/api")
+app.include_router(review_router, prefix="/api")
 
 
 # ── Web UI routes (HTMX + Jinja2) ───────────────────────────
@@ -472,6 +474,61 @@ async def edit_clue_form(request: Request, clue_id: int):
     return templates.TemplateResponse(
         "edit_clue.html",
         {"request": request, "clue": clue, "user": user},
+    )
+
+
+@app.get("/clue/{clue_id}/review", response_class=HTMLResponse)
+async def clue_review(request: Request, clue_id: int):
+    """Review page for candidate solutions to a clue (editors and admins)."""
+    from sqlalchemy import select
+    from app.models.clue import Clue
+    from app.models.solution import ClueCandidate
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(
+            url=f"/api/auth/login?redirect_after=/clue/{clue_id}/review",
+            status_code=303,
+        )
+    if not user.is_editor and not user.is_admin:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "You don't have permission to review clues. A diamond moderator may grant you these permissions.",
+                "user": user,
+            },
+            status_code=403,
+        )
+
+    async with async_session() as db:
+        result = await db.execute(select(Clue).where(Clue.id == clue_id))
+        clue = result.scalar_one_or_none()
+        if not clue:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Clue not found", "user": user},
+                status_code=404,
+            )
+        cand_result = await db.execute(
+            select(ClueCandidate)
+            .where(
+                ClueCandidate.clue_id == clue_id,
+                ClueCandidate.status == "pending",
+            )
+            .order_by(ClueCandidate.confidence.desc())
+        )
+        candidates = cand_result.scalars().all()
+
+    return templates.TemplateResponse(
+        "review.html",
+        {
+            "request": request,
+            "clue": clue,
+            "candidates": candidates,
+            "user": user,
+        },
     )
 
 

@@ -29,6 +29,10 @@ from app.db.session import async_session
 from app.models.clue import Clue, User
 from app.services.ingest.accept import AcceptResult, decide
 from app.services.ingest import state as ingest_state
+from app.services.ingest.window import from_event
+from app.services.ingest.window_manager import WindowManager
+from app.services.ingest.persist import process_window
+from app.services.ingest.llm_worker import LlmWorker
 from app.services.clue_service import ingest_clue
 
 logger = logging.getLogger(__name__)
@@ -52,7 +56,7 @@ async def _get_or_create_bot_user(db) -> User:
     return user
 
 
-async def _ingest_message(event) -> None:
+async def _ingest_message(event, window_manager: WindowManager | None = None) -> None:
     """Run the accept rule and, if accepted, ingest the clue."""
     content = getattr(event, "content", "") or ""
     decision = decide(content)
@@ -74,6 +78,7 @@ async def _ingest_message(event) -> None:
     # ACCEPT
     message_id = getattr(event, "message_id", None)
     author = getattr(event, "user_name", None) or "unknown"
+    author_id = getattr(event, "user_id", None)
     clue_text = decision.clue_text or content
 
     async with async_session() as db:
@@ -88,6 +93,13 @@ async def _ingest_message(event) -> None:
                     message_id, dup.legacy_number,
                 )
                 return
+
+        # Window management: this genuinely-new clue closes the *previous*
+        # clue's window (which now spans up to this clue) and opens a fresh
+        # one for this clue.  Runs on the loop so detection stays off the
+        # sync callback path.  Only fires for new clues (after dedupe).
+        if window_manager is not None:
+            window_manager.on_clue(message_id, author_id)
 
         actor = await _get_or_create_bot_user(db)
         await ingest_clue(
@@ -116,6 +128,31 @@ class IngestDaemon:
         self.bot = None
         self.room = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        # Window accumulation for solution ingest.  Detection runs on window
+        # close (when the next clue arrives) and never blocks ingest.
+        self.window_manager = WindowManager(on_window_closed=self._on_window_closed)
+        # In-process background LLM worker (non-blocking; drains pending_llm).
+        self.llm_worker = LlmWorker()
+
+    def _on_window_closed(self, window, next_clue_author_id):
+        """Handle a completed (A, B) window.  Runs on the asyncio loop.
+
+        Schedules the (async) detection + persistence on the loop.  This is
+        fire-and-forget: detection never blocks ingest, and any LLM work is
+        deferred to the pending_llm queue.
+        """
+        logger.info(
+            "Window closed for clue msg=%s: %d messages, next-clue author=%s",
+            window.clue_message_id, len(window), next_clue_author_id,
+        )
+        if self._loop is None or not self._loop.is_running():
+            return
+
+        async def _run():
+            async with async_session() as db:
+                await process_window(db, window)
+
+        asyncio.run_coroutine_threadsafe(_run(), self._loop)
 
     def _on_message(self, event):
         """Sync callback, runs in sechat's room thread."""
@@ -124,7 +161,9 @@ class IngestDaemon:
             return
         if self._loop is None or not self._loop.is_running():
             return
-        asyncio.run_coroutine_threadsafe(_ingest_message(event), self._loop)
+        # Append to the open window (cheap, structured).
+        self.window_manager.on_message(from_event(event))
+        asyncio.run_coroutine_threadsafe(_ingest_message(event, self.window_manager), self._loop)
 
     async def _connect(self):
         """Log in and join the room (sechat is sync, so run in a thread)."""
@@ -150,11 +189,15 @@ class IngestDaemon:
         """Connect, then keep the loop alive forever (or until interrupted)."""
         self._loop = asyncio.get_running_loop()
         await self._connect()
+        # Start the in-process LLM worker (drains pending_llm in the
+        # background; never blocks ingest).
+        self.llm_worker.start()
         # Keep the event loop alive; sechat's room thread does the work.
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
             logger.info("Shutting down ingest daemon")
+            await self.llm_worker.stop()
             if self.room is not None:
                 await asyncio.to_thread(self.room.halt)
 
