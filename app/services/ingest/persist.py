@@ -82,6 +82,11 @@ async def process_window(
         )
 
     # Enqueue LLM work for wordplay-only messages (dedupe by source_message_id).
+    # The payload carries the *full window transcript* (the clue plus every
+    # message that followed it, with reply structure) so the LLM can read the
+    # whole conversation, not just the single solver message.  The model has
+    # a large context window, so we can afford to hand it the full span.
+    transcript = _build_transcript(window, clue)
     for msg in llm_work:
         if msg.message_id in existing:
             continue
@@ -95,6 +100,8 @@ async def process_window(
                     "solver": msg.user_name or msg.user_id,
                     "enumeration": enumeration,
                     "clue_text": clue.clue_text,
+                    "clue_author": clue.author,
+                    "transcript": transcript,
                 },
             )
         )
@@ -107,6 +114,42 @@ async def process_window(
             len(candidates),
             len(llm_work),
         )
+
+
+def _build_transcript(window: Window, clue: Clue) -> list[dict]:
+    """Serialize a closed window into a structured chat transcript.
+
+    Produces an ordered list of message records for the LLM prompt, each
+    with the message number, author, reply target, and content.  The clue
+    itself is included as the first entry so the model sees the full
+    conversation (author posts clue -> solver replies -> author confirms),
+    not just the single solver message.
+    """
+    transcript: list[dict] = []
+    # The clue message itself (the author's post that started the window).
+    transcript.append(
+        {
+            "msg": "#clue",
+            "author": clue.author or "author",
+            "reply_to": None,
+            "content": clue.clue_text or "",
+        }
+    )
+    # The window's messages, ordered by message_id.  The clue message_id is
+    # excluded (it's represented above); the closing clue's own message was
+    # already discarded by the WindowManager.
+    for m in window.messages:
+        if m.message_id == window.clue_message_id:
+            continue
+        transcript.append(
+            {
+                "msg": f"#{m.message_id}",
+                "author": m.user_name or (str(m.user_id) if m.user_id else "?"),
+                "reply_to": f"#{m.parent_id}" if m.parent_id else None,
+                "content": m.content or "",
+            }
+        )
+    return transcript
 
 
 async def _clue_by_message_id(

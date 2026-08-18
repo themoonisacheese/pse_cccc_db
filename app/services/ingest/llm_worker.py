@@ -34,13 +34,14 @@ from app.models.solution import ClueCandidate, PendingLlm
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "You are an assistant that extracts cryptic-clue answers from chat "
-    "messages. You are given a cryptic clue and a chat message posted by the "
-    "person who solved it. The message may state the answer plainly, or it "
-    "may only explain the wordplay (in which case the answer is implied). "
-    "Reconstruct the answer from the wordplay. The answer must match the "
-    "given enumeration (word lengths). Reply with ONLY the answer, in "
-    "lowercase, no punctuation, no explanation."
+    "You are an assistant that extracts cryptic-clue answers from a chat "
+    "room transcript. You are given a cryptic clue and the chat messages that "
+    "followed it, including who replied to whom. The solver's message may "
+    "state the answer plainly, or it may only explain the wordplay (in which "
+    "case the answer is implied). Reconstruct the answer from the wordplay "
+    "and the surrounding conversation. The answer must match the given "
+    "enumeration (word lengths). Reply with ONLY the answer, in lowercase, "
+    "no punctuation, no explanation."
 )
 
 
@@ -112,6 +113,7 @@ class LlmWorker:
                         clue_text=row.payload.get("clue_text", ""),
                         content=row.payload.get("content", ""),
                         enumeration=row.payload.get("enumeration"),
+                        transcript=row.payload.get("transcript"),
                     )
                 except _LlmUnavailable as exc:
                     # Provider down / rate-limited: back off, keep the row
@@ -154,16 +156,71 @@ class LlmWorker:
             await db.commit()
             return processed
 
+    # ── prompt rendering ───────────────────────────────────────
+    def _render_prompt(
+        self,
+        *,
+        clue_text: str,
+        content: str,
+        enumeration: Optional[str],
+        transcript: Optional[list[dict]] = None,
+    ) -> str:
+        """Build the user prompt for the LLM.
+
+        When a full window transcript is available we render the whole
+        conversation (the clue plus every message that followed, with reply
+        structure) so the model can read the context around the solver's
+        message — e.g. the author posting the clue, the solver replying with
+        wordplay, and the author confirming "correct!".  Falls back to just
+        the single solver message if no transcript was captured.
+        """
+        lines: list[str] = []
+        lines.append(f"Cryptic clue: {clue_text}")
+        lines.append(f"Enumeration: {enumeration or 'unknown'}")
+        lines.append("")
+
+        if transcript:
+            lines.append("Here is the chat history for the author and the solver:")
+            for entry in transcript:
+                author = entry.get("author") or "?"
+                reply = entry.get("reply_to")
+                if reply:
+                    lines.append(
+                        f"[{entry.get('msg')}] {author} (replying to {reply}): "
+                        f"{entry.get('content')}"
+                    )
+                else:
+                    lines.append(
+                        f"[{entry.get('msg')}] {author}: {entry.get('content')}"
+                    )
+            lines.append("")
+            lines.append(
+                "The solver's message is marked by the clue author's reply or "
+                "the wordplay explanation. What is the answer?"
+            )
+        else:
+            lines.append("Solver's chat message:")
+            lines.append(content)
+            lines.append("")
+            lines.append("What is the answer?")
+
+        return "\n".join(lines)
+
     # ── LLM call ───────────────────────────────────────────────
     async def _call_llm(
-        self, *, clue_text: str, content: str, enumeration: Optional[str]
+        self,
+        *,
+        clue_text: str,
+        content: str,
+        enumeration: Optional[str],
+        transcript: Optional[list[dict]] = None,
     ) -> str:
         settings = get_settings()
-        user_prompt = (
-            f"Cryptic clue: {clue_text}\n"
-            f"Enumeration: {enumeration or 'unknown'}\n\n"
-            f"Solver's chat message:\n{content}\n\n"
-            "What is the answer?"
+        user_prompt = self._render_prompt(
+            clue_text=clue_text,
+            content=content,
+            enumeration=enumeration,
+            transcript=transcript,
         )
         payload = {
             "model": settings.llm_model,
