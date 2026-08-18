@@ -401,7 +401,7 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
     font-family: var(--mono);
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--fg);
+    color: var(--green);
     letter-spacing: 0.5px;
     word-break: break-word;
 }

@@ -46,6 +46,10 @@
                         <div class="candidate-solution">
                             <span class="candidate-rank">#{{ loop.index }}</span>
                             <strong class="candidate-answer">{{ cand.solution or '(wordplay — pending LLM)' }}</strong>
+                            {% if cand.solution %}
+                            {% set cand_len = cand.solution | replace(' ', '') | replace('-', '') | length %}
+                            <span class="meta-tag">{{ cand_len }} letters</span>
+                            {% endif %}
                         </div>
                         <div class="candidate-badges">
                             <span class="meta-tag conf-badge" title="Model confidence">conf {{ '%.0f' | format(cand.confidence * 100) }}%</span>
@@ -54,7 +58,7 @@
                             {% endfor %}
                         </div>
                     </div>
-                    {% if cand.solver %}<p class="candidate-solver"><strong>Solver:</strong> {{ cand.solver }}</p>{% endif %}
+                    {% if cand.solver %}<p class="candidate-solver"><strong>Solver:</strong> <a href="/user/{{ cand.solver }}">{{ cand.solver }}</a></p>{% endif %}
                     {% if cand.explanation %}<p class="candidate-explanation">{{ cand.explanation }}</p>{% endif %}
                     <div class="candidate-confidence">
                         <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {{ '%.0f' | format(cand.confidence * 100) }}%"></div></div>
