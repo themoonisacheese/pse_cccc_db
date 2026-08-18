@@ -67,19 +67,21 @@
             <p class="text-muted">If all candidates were wrong and you have the answer, enter it directly.</p>
             <form id="manual-solve-form" hx-post="/api/review/clues/{{ clue.id }}/manual-solve"
                   hx-swap="none" hx-on::after-request="if(event.detail.successful) location.reload();">
-                <div class="form-group">
-                    <label>Solution</label>
-                    <input type="text" name="solution" required />
+                <div class="form-field">
+                    <label for="ms-solution">Solution</label>
+                    <input type="text" name="solution" id="ms-solution" class="form-input" required />
                 </div>
-                <div class="form-group">
-                    <label>Solver (optional)</label>
-                    <input type="text" name="solver" />
+                <div class="form-field">
+                    <label for="ms-solver">Solver (optional)</label>
+                    <input type="text" name="solver" id="ms-solver" class="form-input" />
                 </div>
-                <div class="form-group">
-                    <label>Explanation (optional)</label>
-                    <textarea name="explanation" rows="3"></textarea>
+                <div class="form-field">
+                    <label for="ms-explanation">Explanation (optional)</label>
+                    <textarea name="explanation" id="ms-explanation" class="form-input" rows="3"></textarea>
                 </div>
-                <button type="submit" class="btn btn-small">Save solution</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-small">Save solution</button>
+                </div>
             </form>
         </div>
         {% endif %}

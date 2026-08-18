@@ -88,6 +88,7 @@
     <div class="clue-detail-footer">
         {% if user and (user.is_editor or user.is_admin) %}
         <a href="/clue/{{ clue.id }}/edit" class="btn btn-small">Edit</a>
+        <a href="/clue/{{ clue.id }}/review" class="btn btn-small btn-outline">Review candidates</a>
         {% endif %}
         <a href="/search?author=%22{{ clue.author | urlencode }}%22" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
         {% if clue.solver %}
