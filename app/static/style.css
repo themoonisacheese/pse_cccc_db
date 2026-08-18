@@ -410,6 +410,21 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
 .signal-badge { background: var(--bg-card); color: var(--green); }
 .candidate-solver { color: var(--fg); font-size: 0.95rem; }
 .candidate-explanation { color: var(--fg-dim); font-size: 0.9rem; line-height: 1.5; }
+.candidate-confidence { margin-top: 0.25rem; }
+.conf-bar-track {
+    height: 6px;
+    background: var(--bg-card);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border-soft);
+}
+.conf-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+.candidate-meta-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .candidate-actions { display: flex; gap: 0.75rem; margin-top: 0.25rem; }
 .btn-approve { background: var(--green); color: #1a1b26; }
 .btn-approve:hover { background: #b8e08a; color: #1a1b26; }

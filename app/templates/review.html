@@ -4,25 +4,41 @@
 <div class="clue-detail">
     <div class="clue-detail-header">
         <h1>Review — Clue #{{ clue.legacy_number }}</h1>
-        <a href="/clue/{{ clue.id }}" class="btn btn-small btn-outline">← Back to clue</a>
+        {% if clue.clue_date %}
+        <span class="clue-date" title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</span>
+        {% endif %}
     </div>
 
     <div class="clue-detail-body">
         <div class="detail-section">
             <h3>Clue</h3>
             <p class="clue-text-full">{{ clue.clue_text }}</p>
-            <p><strong>Author:</strong> {{ clue.author }}</p>
-            {% if clue.solution %}
-            <p><span class="meta-tag">Already solved: {{ clue.solution }}</span></p>
-            {% else %}
-            <p><span class="meta-tag">Not yet solved</span></p>
+            {% if clue.clue_length %}
+            <span class="meta-tag">{{ clue.clue_length }} characters</span>
             {% endif %}
+        </div>
+
+        <div class="detail-grid">
+            <div class="detail-section">
+                <h3>Author</h3>
+                <p><a href="/user/{{ clue.author }}">{{ clue.author }}</a></p>
+            </div>
+            <div class="detail-section">
+                <h3>Status</h3>
+                {% if clue.solution %}
+                <p class="clue-solution-full">{{ clue.solution }}</p>
+                <span class="meta-tag">Already solved</span>
+                {% else %}
+                <p class="text-muted">Not yet solved</p>
+                <span class="meta-tag">Awaiting review</span>
+                {% endif %}
+            </div>
         </div>
 
         {% if candidates %}
         <div class="detail-section">
-            <h3>Candidate solutions ({{ candidates | length }})</h3>
-            <p class="text-muted">Sorted by confidence. Approve the correct one, or reject the rest.</p>
+            <h3>Candidate solutions</h3>
+            <p class="text-muted">{{ candidates | length }} awaiting review, sorted by confidence.</p>
             <div class="candidate-list">
                 {% for cand in candidates %}
                 <div class="candidate-card" id="candidate-{{ cand.id }}">
@@ -32,7 +48,7 @@
                             <strong class="candidate-answer">{{ cand.solution or '(wordplay — pending LLM)' }}</strong>
                         </div>
                         <div class="candidate-badges">
-                            <span class="meta-tag conf-badge">conf {{ '%.0f' | format(cand.confidence * 100) }}%</span>
+                            <span class="meta-tag conf-badge" title="Model confidence">conf {{ '%.0f' | format(cand.confidence * 100) }}%</span>
                             {% for sig, val in cand.signals.items() if val %}
                             <span class="meta-tag signal-badge">{{ sig }}</span>
                             {% endfor %}
@@ -40,9 +56,14 @@
                     </div>
                     {% if cand.solver %}<p class="candidate-solver"><strong>Solver:</strong> {{ cand.solver }}</p>{% endif %}
                     {% if cand.explanation %}<p class="candidate-explanation">{{ cand.explanation }}</p>{% endif %}
-                    {% if cand.source_message_id %}
-                    <a class="meta-tag" href="https://chat.stackexchange.com/transcript/message/{{ cand.source_message_id }}#{{ cand.source_message_id }}" target="_blank" rel="noopener">source msg #{{ cand.source_message_id }}</a>
-                    {% endif %}
+                    <div class="candidate-confidence">
+                        <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {{ '%.0f' | format(cand.confidence * 100) }}%"></div></div>
+                    </div>
+                    <div class="candidate-meta-row">
+                        {% if cand.source_message_id %}
+                        <a class="meta-tag" href="https://chat.stackexchange.com/transcript/message/{{ cand.source_message_id }}#{{ cand.source_message_id }}" target="_blank" rel="noopener">source msg #{{ cand.source_message_id }}</a>
+                        {% endif %}
+                    </div>
                     <div class="candidate-actions">
                         <button class="btn btn-small btn-approve" hx-post="/api/review/candidates/{{ cand.id }}/approve"
                             hx-swap="none"
@@ -65,13 +86,15 @@
             <p class="text-muted">No candidates awaiting review for this clue.</p>
         </div>
         {% endif %}
+    </div>
 
-        {% if not clue.solution %}
-        <div class="detail-section">
-            <h3>Manual solve</h3>
-            <p class="text-muted">If all candidates were wrong and you have the answer, enter it directly.</p>
-            <form id="manual-solve-form" hx-post="/api/review/clues/{{ clue.id }}/manual-solve"
-                  hx-swap="none" hx-on::after-request="if(event.detail.successful) location.reload();">
+    {% if not clue.solution %}
+    <div class="detail-section">
+        <h3>Manual solve</h3>
+        <p class="text-muted">If all candidates were wrong and you have the answer, enter it directly.</p>
+        <form id="manual-solve-form" hx-post="/api/review/clues/{{ clue.id }}/manual-solve"
+              hx-swap="none" hx-on::after-request="if(event.detail.successful) location.reload();">
+            <div class="form-grid">
                 <div class="form-field">
                     <label for="ms-solution">Solution</label>
                     <input type="text" name="solution" id="ms-solution" class="form-input" required />
@@ -80,16 +103,21 @@
                     <label for="ms-solver">Solver (optional)</label>
                     <input type="text" name="solver" id="ms-solver" class="form-input" />
                 </div>
-                <div class="form-field">
+                <div class="form-field form-field-full">
                     <label for="ms-explanation">Explanation (optional)</label>
                     <textarea name="explanation" id="ms-explanation" class="form-input" rows="3"></textarea>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-small">Save solution</button>
-                </div>
-            </form>
-        </div>
-        {% endif %}
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-small">Save solution</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="clue-detail-footer">
+        <a href="/clue/{{ clue.id }}" class="btn btn-small btn-outline">← Back to clue</a>
+        <a href="/search?author=%22{{ clue.author | urlencode }}%22" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
     </div>
 </div>
 {% endblock %}
