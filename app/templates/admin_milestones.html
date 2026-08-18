@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Clue Milestones — CCCC DB{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>Clue Milestones</h1>
+    <p class="hint">
+        Lists users who posted their <strong>very first clue</strong> or their
+        <strong>50th clue</strong> within the selected window. The window defaults
+        to the last 2 weeks; use the date picker to widen it.
+    </p>
+
+    <div class="admin-section">
+        <form method="get" action="/admin/milestones" class="search-form">
+            <label for="since" class="hint" style="align-self:center;">Show milestones since:</label>
+            <input type="date" id="since" name="since" value="{{ cutoff.isoformat() }}"
+                   class="search-input" style="width:auto;">
+            <button type="submit" class="btn">Apply</button>
+            <a href="/admin/milestones" class="btn btn-outline">Reset (2 weeks)</a>
+        </form>
+        <p class="hint">
+            Showing milestones on or after <strong>{{ cutoff.isoformat() }}</strong>.
+        </p>
+    </div>
+
+    <div class="admin-section">
+        <h2>First clue posted in window</h2>
+        {% if first_clues %}
+        <table class="clue-table">
+            <thead>
+                <tr>
+                    <th>Author</th>
+                    <th>Date</th>
+                    <th>Clue #</th>
+                    <th>Clue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in first_clues %}
+                <tr>
+                    <td><a href="/user/{{ c.author | urlencode }}">{{ c.author }}</a></td>
+                    <td>{{ c.clue_date | rel_date }}</td>
+                    <td class="clue-num">#{{ c.legacy_number }}</td>
+                    <td><a href="/clue/{{ c.id }}">view</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="hint">No first clues posted in this window.</p>
+        {% endif %}
+    </div>
+
+    <div class="admin-section">
+        <h2>50th clue posted in window</h2>
+        {% if fiftieth_clues %}
+        <table class="clue-table">
+            <thead>
+                <tr>
+                    <th>Author</th>
+                    <th>Date</th>
+                    <th>Clue #</th>
+                    <th>Clue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in fiftieth_clues %}
+                <tr>
+                    <td><a href="/user/{{ c.author | urlencode }}">{{ c.author }}</a></td>
+                    <td>{{ c.clue_date | rel_date }}</td>
+                    <td class="clue-num">#{{ c.legacy_number }}</td>
+                    <td><a href="/clue/{{ c.id }}">view</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="hint">No 50th clues posted in this window.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

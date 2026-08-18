@@ -637,6 +637,73 @@ async def admin_badges_page(request: Request):
     )
 
 
+@app.get("/admin/milestones", response_class=HTMLResponse)
+async def admin_milestones_page(request: Request, since: str = ""):
+    """Admin page: users who posted their 1st or 50th clue within a window.
+
+    The window is controlled by a date picker (`since`); it defaults to the
+    last 2 weeks. "First clue" means the author's very first clue
+    (clues_by_author_so_far == 1); "50th clue" means the clue that took the
+    author to 50 total (clues_by_author_so_far == 50). Only admins (diamond
+    moderators) may view this page.
+    """
+    from datetime import date, timedelta
+
+    from sqlalchemy import select
+    from app.models.clue import Clue
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(
+            url="/api/auth/login?redirect_after=/admin/milestones", status_code=303
+        )
+    if not user.is_admin:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "Admin privileges required. Only diamond moderators can access this page.",
+                "user": user,
+            },
+            status_code=403,
+        )
+
+    today = date.today()
+    default_since = today - timedelta(weeks=2)
+    try:
+        cutoff = date.fromisoformat(since) if since else default_since
+    except ValueError:
+        cutoff = default_since
+
+    async with async_session() as db:
+        # Authors whose very first clue falls inside the window.
+        first_clues = (await db.execute(
+            select(Clue.author, Clue.clue_date, Clue.legacy_number, Clue.id)
+            .where(Clue.clues_by_author_so_far == 1, Clue.clue_date >= cutoff)
+            .order_by(Clue.clue_date, Clue.legacy_number)
+        )).all()
+
+        # Authors who posted their 50th clue inside the window.
+        fiftieth_clues = (await db.execute(
+            select(Clue.author, Clue.clue_date, Clue.legacy_number, Clue.id)
+            .where(Clue.clues_by_author_so_far == 50, Clue.clue_date >= cutoff)
+            .order_by(Clue.clue_date, Clue.legacy_number)
+        )).all()
+
+    return templates.TemplateResponse(
+        "admin_milestones.html",
+        {
+            "request": request,
+            "user": user,
+            "cutoff": cutoff,
+            "default_since": default_since,
+            "first_clues": first_clues,
+            "fiftieth_clues": fiftieth_clues,
+        },
+    )
+
+
 @app.get("/stats", response_class=HTMLResponse)
 async def stats_page(request: Request, period: str = "all"):
     """Statistics page."""
