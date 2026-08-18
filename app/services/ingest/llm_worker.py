@@ -230,6 +230,11 @@ class LlmWorker:
             ],
             "temperature": 0.0,
             "max_tokens": 60,
+            # The deployed model is a reasoning model: without this it burns
+            # the whole max_tokens budget on hidden reasoning tokens and
+            # returns an empty content.  Disabling thinking makes it answer
+            # directly (verified against the provider: 4 tokens, finish=stop).
+            "thinking": {"type": "disabled"},
         }
         headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
         try:
