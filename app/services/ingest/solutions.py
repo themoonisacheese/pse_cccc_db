@@ -14,14 +14,19 @@ this clue.  We search that user's messages first.  If no candidate is found
 there, the clue is flagged for manual review (detection failed or something
 unusual happened) rather than silently scanning the whole window.
 
-Confidence model (deterministic signals dominate; LLM self-confidence is a
-weak tiebreaker):
-    hash_verified   ~ 1.0  (proof: md5(salt+answer) == hash)
-    author_reply    ~ 0.9  (author replied to the solver's message)
-    solver_match    ~ 0.7  (solver identity + enumeration match)
-    reply_to_clue   ~ 0.6  (solver answered the clue directly)
-    enum_match      ~ 0.4  (word-lengths match the clue enumeration)
-    classifier      ~ 0.3  (LLM reconstruction, wordplay-only)
+Confidence model: confidence = base_weight × enum_fit_score, where
+enum_fit_score grades how well the extraction's letter count fits the clue's
+enumeration (Δ=0 -> 1.0, Δ=1 -> 0.6, Δ=2 -> 0.3, Δ≥3 -> 0.1).  Base weights:
+
+    extract_caps      1.0  (keep every capitalized letter, concatenate)
+    extract_caps_words 1.0 (only entirely-uppercase words)
+    full_message      0.6  (the solver's whole message as the answer)
+    classifier        0.6  (LLM reconstruction, wordplay-only)
+
+The free classifiers (caps) are the strongest source; full-message and the
+LLM rank equal and lower.  A free classifier that hits enum-fit 1.0 scores
+1.0 and lets us skip the LLM for that message entirely.  Hash verification
+is a hard proof and overrides the model (confidence 1.0).
 """
 
 from __future__ import annotations
@@ -140,6 +145,123 @@ def _extract_salts(msg: WindowMessage) -> list[str]:
     return salts
 
 
+# ── deterministic extractions ────────────────────────────────────────────
+#
+# Cryptic answers are conventionally written in ALL CAPS by the solver, so
+# the capitalized content of a message is a strong, free signal for the
+# answer.  We produce two complementary extractions from each solver message
+# (both pure string ops, no LLM):
+#
+#   * caps-concat  — keep every capitalized letter and concatenate.  Catches
+#                    answers scattered across a message, e.g.
+#                    "PA'S (_S) OVER" -> "PASSOVER".
+#   * caps-words   — keep only words that are entirely uppercase, splitting
+#                    on whitespace/hyphens.  Catches clean single/multi-word
+#                    answers (e.g. "FROG") without the stray single-letter-caps
+#                    false positive of caps-concat.
+#
+# Each extraction is scored by `enum_fit_score`: how well its letter count
+# fits the clue's enumeration.  Enum fit is the dominant confidence driver
+# for deterministic candidates — a caps extraction that exactly fits the
+# enumeration outranks both the full-message extraction and the LLM.
+
+# Base weights for each extraction type.  Confidence = base_weight × enum_fit.
+# The free classifiers (caps-concat, caps-words) are the strongest source; the
+# full-message extraction and the LLM classifier rank equal and lower.  A free
+# classifier that hits enum-fit 1.0 therefore scores 1.0 and lets us skip the
+# LLM entirely for that message.
+BASE_WEIGHT_EXTRACT_CAPS = 1.0
+BASE_WEIGHT_EXTRACT_CAPS_WORDS = 1.0
+BASE_WEIGHT_FULL_MESSAGE = 0.6
+BASE_WEIGHT_CLASSIFIER = 0.6
+
+
+def _delta_to_score(delta: int) -> float:
+    """Graded enum-fit score from a letter-count delta.
+
+    Enumeration fit is boolean for *correctness* (an 8-letter answer either
+    fits (8) or it doesn't), but for *review ranking* it is graded: an
+    off-by-one candidate is almost certainly a near-correct extraction (we
+    grabbed or dropped a stray letter) and should surface near the top of the
+    review queue, not be buried.  So we map the length delta to a continuous
+    score:
+        Δ=0 -> 1.0   (exact fit)
+        Δ=1 -> 0.6   (near-miss: high review priority)
+        Δ=2 -> 0.3
+        Δ≥3 -> 0.1   (essentially noise)
+    """
+    if delta == 0:
+        return 1.0
+    if delta == 1:
+        return 0.6
+    if delta == 2:
+        return 0.3
+    return 0.1
+
+
+def _extract_caps_concat(text: str) -> str:
+    """Keep every capitalized letter and concatenate.
+
+    e.g. "PA'S (_S) OVER" -> "PASSOVER".  Ignores the trailing enumeration.
+    """
+    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text.strip())
+    return "".join(ch for ch in text if ch.isupper() and ch.isalpha())
+
+
+def _extract_caps_words(text: str) -> list[str]:
+    """Words that are entirely uppercase, splitting on whitespace/hyphens.
+
+    e.g. "the answer is FROG" -> ["FROG"].  A single stray capital (e.g. the
+    "I" in "I FROG") is dropped (length < 2), so this avoids the caps-concat
+    false positive while still catching clean multi-word answers.
+    """
+    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text.strip())
+    words: list[str] = []
+    for token in re.split(r"[\s-]+", text):
+        letters = re.sub(r"[^A-Za-z]", "", token)
+        if letters and letters.isupper() and len(letters) >= 2:
+            words.append(token)
+    return words
+
+
+def _letter_count(word: str) -> int:
+    return sum(1 for ch in word if ch.isalpha())
+
+
+def _enum_fit_score(word_lengths: list[int], enumeration: str | None) -> float:
+    """Graded enum-fit score from actual word lengths vs the enumeration.
+
+    * single-part `(7)`  — compare the total letter count to the part.
+    * multi-part `(4,8)` — a single flat word (e.g. caps-concat) compares its
+      total against the *sum* of the parts; a multi-word result (e.g.
+      caps-words) compares per-word against the parts in order, averaging the
+      per-part scores (so a partial match ranks above a total miss but below
+      a full match).
+    """
+    parts = _enumeration_lengths(enumeration)
+    if not parts:
+        return 0.0
+    if len(word_lengths) == 1:
+        # A single flat word matches against the total (sum of parts).
+        return _delta_to_score(abs(word_lengths[0] - sum(parts)))
+    scores = []
+    for i, part in enumerate(parts):
+        actual = word_lengths[i] if i < len(word_lengths) else 0
+        scores.append(_delta_to_score(abs(actual - part)))
+    return sum(scores) / len(scores)
+
+
+def enum_fit_for_answer(answer: str, enumeration: str | None) -> float:
+    """Graded enum fit for a plain answer string (used by the LLM worker).
+
+    The LLM returns a bare answer (lowercase, no punctuation); we split it
+    into words and score it against the enumeration the same way the
+    deterministic extractions are scored.
+    """
+    words = re.findall(r"[A-Za-z]+", answer or "")
+    return _enum_fit_score([len(w) for w in words], enumeration)
+
+
 # ── the pipeline ────────────────────────────────────────────────────────
 
 def detect(window: Window, enumeration: str | None) -> tuple[list[Candidate], list[WindowMessage]]:
@@ -173,7 +295,72 @@ def detect(window: Window, enumeration: str | None) -> tuple[list[Candidate], li
         # review, but mark it low-confidence.
         solver_msgs = messages
 
-    # Tier 1: hash verification (proof).
+    # Messages where a free classifier hit enum-fit 1.0: the deterministic
+    # answer is trusted, so we skip the LLM for that message entirely (saves
+    # tokens + latency).
+    llm_skip: set[int] = set()
+
+    # Tier 1: enumeration pre-filter — deterministic extractions (free).
+    # For each solver message we produce caps-concat, caps-words, and
+    # full-message candidates, each scored base_weight × enum_fit.
+    for msg in solver_msgs:
+        text = msg.content or ""
+        caps_concat = _extract_caps_concat(text)
+        caps_words = _extract_caps_words(text)
+        full = _extract_answer(msg)
+
+        # Caps-concat: keep every capitalized letter (e.g. "PA'S (_S) OVER"
+        # -> "PASSOVER").  Require ≥2 letters so a lone stray capital in an
+        # otherwise-lowercase message doesn't produce noise.
+        if len(caps_concat) >= 2:
+            fit = _enum_fit_score([len(caps_concat)], enumeration)
+            candidates.append(Candidate(
+                solution=caps_concat,
+                solver=msg.user_name or str(msg.user_id),
+                explanation=text,
+                confidence=BASE_WEIGHT_EXTRACT_CAPS * fit,
+                signals={"extract_caps": True, "enum_match": fit == 1.0},
+                source_message_id=msg.message_id,
+            ))
+            if fit == 1.0:
+                llm_skip.add(msg.message_id)
+
+        # Caps-words: only entirely-uppercase words (e.g. "FROG"), avoiding
+        # the stray single-letter-caps false positive of caps-concat.
+        if caps_words:
+            fit = _enum_fit_score(
+                [_letter_count(w) for w in caps_words], enumeration
+            )
+            candidates.append(Candidate(
+                solution=" ".join(caps_words),
+                solver=msg.user_name or str(msg.user_id),
+                explanation=text,
+                confidence=BASE_WEIGHT_EXTRACT_CAPS_WORDS * fit,
+                signals={"extract_caps_words": True, "enum_match": fit == 1.0},
+                source_message_id=msg.message_id,
+            ))
+            if fit == 1.0:
+                llm_skip.add(msg.message_id)
+
+        # Full-message extraction (the solver's whole message as the answer).
+        # Only fire when it's a *plausible* answer — i.e. it fits the
+        # enumeration as an exact or near-miss (fit ≥ 0.6).  A wordplay
+        # explanation ("t woof hear t_s_") is far from the enumeration and
+        # must not become a candidate; it goes to the LLM instead.
+        if full:
+            fit = _enum_fit_score(_word_lengths(full), enumeration)
+            if fit >= 0.6:
+                candidates.append(Candidate(
+                    solution=full,
+                    solver=msg.user_name or str(msg.user_id),
+                    explanation=text,
+                    confidence=BASE_WEIGHT_FULL_MESSAGE * fit,
+                    signals={"solver_match": True, "enum_match": fit == 1.0},
+                    source_message_id=msg.message_id,
+                ))
+
+    # Tier 2: hash verification (proof).  This is a hard proof, not an
+    # extraction, so it overrides the enum-fit model (confidence 1.0).
     for msg in messages:
         digest = _find_digest(msg)
         if not digest:
@@ -187,7 +374,7 @@ def detect(window: Window, enumeration: str | None) -> tuple[list[Candidate], li
                 cand.confidence = max(cand.confidence, 1.0)
                 candidates.append(cand)
 
-    # Tier 2: author-reply walk — the author replied to a message, confirming
+    # Tier 3: author-reply walk — the author replied to a message, confirming
     # it.  That message is the solution.
     author_id = window.clue_author_id
     if author_id is not None:
@@ -205,7 +392,7 @@ def detect(window: Window, enumeration: str | None) -> tuple[list[Candidate], li
             )
             candidates.append(cand)
 
-    # Tier 3: reply-to-clue — the solver answered the clue directly.
+    # Tier 4: reply-to-clue — the solver answered the clue directly.
     for msg in window.replies_to(window.clue_message_id):
         cand = Candidate(
             solution=_extract_answer(msg),
@@ -217,23 +404,14 @@ def detect(window: Window, enumeration: str | None) -> tuple[list[Candidate], li
         )
         candidates.append(cand)
 
-    # Tier 4: solver identity + enumeration match (deterministic, no LLM).
-    for msg in solver_msgs:
-        if _matches_enumeration(msg.content, enumeration):
-            cand = Candidate(
-                solution=_extract_answer(msg),
-                solver=msg.user_name or str(msg.user_id),
-                explanation=msg.content,
-                confidence=0.7,
-                signals={"solver_match": True, "enum_match": True},
-                source_message_id=msg.message_id,
-            )
-            candidates.append(cand)
-
     # Tier 5: LLM wordplay residue — the plain answer isn't written out.  We
     # don't call the LLM here; we hand the solver's wordplay messages to the
     # caller as llm_work, which the LLM worker turns into candidates.
+    # Messages where a free classifier already hit enum-fit 1.0 are skipped —
+    # the deterministic answer is trusted, no LLM needed.
     for msg in solver_msgs:
+        if msg.message_id in llm_skip:
+            continue
         if _looks_like_wordplay(msg.content, enumeration):
             llm_work.append(msg)
 

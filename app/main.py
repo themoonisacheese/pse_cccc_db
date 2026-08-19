@@ -75,6 +75,8 @@ SIGNAL_LABELS = {
     "solver_match": "solver match",
     "reply_to_clue": "reply to clue",
     "enum_match": "enum match",
+    "extract_caps": "extract caps",
+    "extract_caps_words": "extract caps-words",
 }
 
 

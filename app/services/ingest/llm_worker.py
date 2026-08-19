@@ -30,6 +30,10 @@ from sqlalchemy import select, update
 from app.core.config import get_settings
 from app.db.session import async_session
 from app.models.solution import ClueCandidate, PendingLlm
+from app.services.ingest.solutions import (
+    BASE_WEIGHT_CLASSIFIER,
+    enum_fit_for_answer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -136,17 +140,24 @@ class LlmWorker:
                     processed += 1
                     continue
 
-                # Success — write a candidate.
+                # Success — write a candidate.  Confidence follows the same
+                # model as the deterministic extractions: base_weight ×
+                # enum_fit.  The LLM classifier base weight is 0.6 (equal to
+                # full-message), and the enum fit grades how well the
+                # reconstructed answer matches the clue's enumeration.
                 self._consecutive_failures = 0
                 if answer:
+                    fit = enum_fit_for_answer(
+                        answer, row.payload.get("enumeration")
+                    )
                     db.add(
                         ClueCandidate(
                             clue_id=row.clue_id,
                             solution=answer,
                             solver=row.payload.get("solver"),
                             explanation=row.payload.get("content"),
-                            confidence=0.3,
-                            signals={"classifier": True},
+                            confidence=BASE_WEIGHT_CLASSIFIER * fit,
+                            signals={"classifier": True, "enum_match": fit == 1.0},
                             source_message_id=row.payload.get("source_message_id"),
                         )
                     )

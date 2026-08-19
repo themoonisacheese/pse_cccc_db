@@ -28,7 +28,7 @@ def test_enumeration_match():
     assert len(cands) == 1
     c = cands[0]
     assert c.solution == "Two of hearts"
-    assert c.confidence == 0.7
+    assert c.confidence == 0.6
     assert c.signals.get("solver_match")
     assert c.signals.get("enum_match")
     assert work == []
@@ -85,6 +85,93 @@ def test_noise_user_filtered():
         assert all(c.source_message_id != 502 for c in cands)
     finally:
         window_mod.NOISE_USER_IDS.discard(99)
+
+
+def test_caps_concat_extraction():
+    """PA'S (_S) OVER -> PASSOVER, confidence 1.0 (base 1.0 x enum-fit 1.0)."""
+    w = _window(700, 1, 42, [
+        WindowMessage(message_id=701, user_id=42, user_name="solver",
+                      content="PA'S (_S) OVER"),
+    ])
+    cands, work = detect(w, "(8)")
+    caps = [c for c in cands if c.signals.get("extract_caps")]
+    assert len(caps) == 1
+    assert caps[0].solution == "PASSOVER"
+    assert caps[0].confidence == 1.0
+    # Free classifier hit 1.0 -> LLM skipped.
+    assert work == []
+
+
+def test_caps_words_extraction():
+    """Clean all-caps answer: 'I FROG' -> FROG (caps-words drops the stray 'I')."""
+    w = _window(800, 1, 42, [
+        WindowMessage(message_id=801, user_id=42, user_name="solver",
+                      content="I FROG"),
+    ])
+    cands, _ = detect(w, "(4)")
+    caps_words = [c for c in cands if c.signals.get("extract_caps_words")]
+    assert len(caps_words) == 1
+    assert caps_words[0].solution == "FROG"
+    assert caps_words[0].confidence == 1.0
+    # caps-concat would grab the stray 'I' -> "IFROG" (5 letters), a near-miss
+    # (Δ=1) so it ranks below the clean caps-words answer.
+    caps_concat = [c for c in cands if c.signals.get("extract_caps")]
+    assert len(caps_concat) == 1
+    assert caps_concat[0].solution == "IFROG"
+    assert caps_concat[0].confidence == 0.6
+
+
+def test_caps_concat_near_miss_ranked():
+    """Off-by-one caps extraction ranks high but below 1.0 (Δ=1 -> 0.6)."""
+    w = _window(900, 1, 42, [
+        WindowMessage(message_id=901, user_id=42, user_name="solver",
+                      content="PASSOVE"),  # 7 letters, enum is 8
+    ])
+    cands, _ = detect(w, "(8)")
+    caps = [c for c in cands if c.signals.get("extract_caps")]
+    assert len(caps) == 1
+    assert caps[0].solution == "PASSOVE"
+    assert caps[0].confidence == 0.6  # base 1.0 x enum-fit 0.6 (Δ=1)
+
+
+def test_multi_part_enum_caps_concat():
+    """Multi-part enumeration: caps-concat flat count vs sum of parts."""
+    w = _window(1000, 1, 42, [
+        WindowMessage(message_id=1001, user_id=42, user_name="solver",
+                      content="PA'S (_S) OVER"),
+    ])
+    cands, _ = detect(w, "(3, 5)")
+    caps = [c for c in cands if c.signals.get("extract_caps")]
+    assert len(caps) == 1
+    # PASSOVER is 8 letters; sum of (3,5) is 8 -> exact fit, 1.0.
+    assert caps[0].solution == "PASSOVER"
+    assert caps[0].confidence == 1.0
+
+
+def test_llm_skip_when_free_classifier_hits():
+    """A message with a perfect caps extraction is not routed to the LLM."""
+    w = _window(1100, 1, 42, [
+        WindowMessage(message_id=1101, user_id=42, user_name="solver",
+                      content="PA'S (_S) OVER"),
+    ])
+    cands, work = detect(w, "(8)")
+    assert any(c.signals.get("extract_caps") and c.confidence == 1.0
+               for c in cands)
+    assert work == []
+
+
+def test_wordplay_still_routed_to_llm_when_no_caps_fit():
+    """Wordplay with no caps extraction that fits is still LLM work."""
+    w = _window(1200, 1, 42, [
+        WindowMessage(message_id=1201, user_id=42, user_name="solver",
+                      content="t woof hear t_s_"),
+    ])
+    cands, work = detect(w, "(3, 2, 6)")
+    # No caps-concat (no uppercase letters), no caps-words, full-message far
+    # from enum -> no deterministic candidate, routed to LLM.
+    assert not any(c.signals.get("extract_caps") for c in cands)
+    assert not any(c.signals.get("extract_caps_words") for c in cands)
+    assert len(work) == 1
 
 
 def test_solver_identity_invariant_fallback():
