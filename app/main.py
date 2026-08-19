@@ -77,6 +77,7 @@ SIGNAL_LABELS = {
     "enum_match": "enum match",
     "extract_caps": "extract caps",
     "extract_caps_words": "extract caps-words",
+    "extract_letters": "extract letters",
 }
 
 

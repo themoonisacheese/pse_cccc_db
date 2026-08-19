@@ -18,10 +18,11 @@ Confidence model: confidence = base_weight × enum_fit_score, where
 enum_fit_score grades how well the extraction's letter count fits the clue's
 enumeration (Δ=0 -> 1.0, Δ=1 -> 0.6, Δ=2 -> 0.3, Δ≥3 -> 0.1).  Base weights:
 
-    extract_caps      1.0  (keep every capitalized letter, concatenate)
+    extract_caps       1.0 (keep every capitalized letter, concatenate)
     extract_caps_words 1.0 (only entirely-uppercase words)
-    full_message      0.6  (the solver's whole message as the answer)
-    classifier        0.6  (LLM reconstruction, wordplay-only)
+    extract_letters    1.0 (keep every letter, caps or not)
+    full_message       0.6 (the solver's whole message as the answer)
+    classifier         0.6 (LLM reconstruction, wordplay-only)
 
 The free classifiers (caps) are the strongest source; full-message and the
 LLM rank equal and lower.  A free classifier that hits enum-fit 1.0 scores
@@ -172,6 +173,7 @@ def _extract_salts(msg: WindowMessage) -> list[str]:
 # LLM entirely for that message.
 BASE_WEIGHT_EXTRACT_CAPS = 1.0
 BASE_WEIGHT_EXTRACT_CAPS_WORDS = 1.0
+BASE_WEIGHT_EXTRACT_LETTERS = 1.0
 BASE_WEIGHT_FULL_MESSAGE = 0.6
 BASE_WEIGHT_CLASSIFIER = 0.6
 
@@ -222,6 +224,17 @@ def _extract_caps_words(text: str) -> list[str]:
         if letters and letters.isupper() and len(letters) >= 2:
             words.append(token)
     return words
+
+
+def _extract_letters(text: str) -> str:
+    """Keep every letter, caps or not, and concatenate (uppercased).
+
+    e.g. "TBI + l_ i_ S_ i_" -> "TBILISI".  This catches answers whose
+    letters are scattered across a message *with mixed case* — a case the
+    caps-only extractors miss (the lowercase l/i are part of the answer).
+    """
+    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text.strip())
+    return "".join(ch for ch in text if ch.isalpha()).upper()
 
 
 def _letter_count(word: str) -> int:
@@ -307,6 +320,7 @@ def detect(window: Window, enumeration: str | None) -> tuple[list[Candidate], li
         text = msg.content or ""
         caps_concat = _extract_caps_concat(text)
         caps_words = _extract_caps_words(text)
+        letters = _extract_letters(text)
         full = _extract_answer(msg)
 
         # Caps-concat: keep every capitalized letter (e.g. "PA'S (_S) OVER"
@@ -341,6 +355,34 @@ def detect(window: Window, enumeration: str | None) -> tuple[list[Candidate], li
             ))
             if fit == 1.0:
                 llm_skip.add(msg.message_id)
+
+        # Extract-letters: keep every letter, caps or not (e.g.
+        # "TBI + l_ i_ S_ i_" -> "TBILISI").  Catches mixed-case answers the
+        # caps-only extractors miss.  Only fire when the message is NOT a
+        # clean plain answer and is *mixed case* (has both upper and lower
+        # letters) — pure-lowercase wordplay ("t woof hear t_s_") must not
+        # produce a junk candidate.  Also require a plausible fit (≥0.6).
+        has_mixed_case = (
+            any(ch.isupper() for ch in text)
+            and any(ch.islower() for ch in text)
+        )
+        if (
+            has_mixed_case
+            and not _matches_enumeration(text, enumeration)
+            and len(letters) >= 2
+        ):
+            fit = _enum_fit_score([len(letters)], enumeration)
+            if fit >= 0.6:
+                candidates.append(Candidate(
+                    solution=letters,
+                    solver=msg.user_name or str(msg.user_id),
+                    explanation=text,
+                    confidence=BASE_WEIGHT_EXTRACT_LETTERS * fit,
+                    signals={"extract_letters": True, "enum_match": fit == 1.0},
+                    source_message_id=msg.message_id,
+                ))
+                if fit == 1.0:
+                    llm_skip.add(msg.message_id)
 
         # Full-message extraction (the solver's whole message as the answer).
         # Only fire when it's a *plausible* answer — i.e. it fits the

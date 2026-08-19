@@ -121,6 +121,21 @@ def test_caps_words_extraction():
     assert caps_concat[0].confidence == 0.6
 
 
+def test_extract_letters_mixed_case():
+    """Mixed-case scattered answer: 'TBI + l_ i_ S_ i_' -> TBILISI (7)."""
+    w = _window(810, 1, 42, [
+        WindowMessage(message_id=811, user_id=42, user_name="solver",
+                      content="TBI + l_ i_ S_ i_"),
+    ])
+    cands, work = detect(w, "(7)")
+    letters = [c for c in cands if c.signals.get("extract_letters")]
+    assert len(letters) == 1
+    assert letters[0].solution == "TBILISI"
+    assert letters[0].confidence == 1.0
+    # Free classifier hit 1.0 -> LLM skipped.
+    assert work == []
+
+
 def test_caps_concat_near_miss_ranked():
     """Off-by-one caps extraction ranks high but below 1.0 (Δ=1 -> 0.6)."""
     w = _window(900, 1, 42, [
