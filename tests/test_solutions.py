@@ -198,3 +198,35 @@ def test_solver_identity_invariant_fallback():
     cands, _ = detect(w, "(3, 2, 6)")
     assert len(cands) == 1
     assert cands[0].solver == "other"
+
+
+def test_single_part_enum_multiword_not_false_match():
+    """A multi-word message must NOT get enum-match just because its first
+    word matches the single-part enumeration.
+
+    Regression: "Pseudocode = sue (legally bash) ..." (enum (10)) used to
+    score 1.0 because the first word "Pseudocode" is 10 letters.  The total
+    letter count is far from 10, so it must not be a match.
+    """
+    from app.services.ingest.solutions import _enum_fit_score
+    # 10 + 3 + 5 + 4 + 4 + 4 + 4 = 34 letters total, enum (10).
+    assert _enum_fit_score([10, 3, 5, 4, 4, 4, 4], "(10)") < 1.0
+    # A genuine single-word 10-letter answer still matches.
+    assert _enum_fit_score([10], "(10)") == 1.0
+    # Multi-word that totals exactly the part also matches (e.g. caps-words
+    # "TWO OF HEARTS" -> [3,2,6], enum (11) -> 3+2+6=11).
+    assert _enum_fit_score([3, 2, 6], "(11)") == 1.0
+
+
+def test_single_part_enum_does_not_fire_on_prose():
+    """The full-message extraction must not fire on prose that merely starts
+    with a word matching the enumeration."""
+    w = _window(1300, 1, 42, [
+        WindowMessage(message_id=1301, user_id=42, user_name="solver",
+                      content="Pseudocode = sue (legally bash) John Doe code"),
+    ])
+    cands, _ = detect(w, "(10)")
+    # No full-message / solver_match candidate: the whole message is not a
+    # 10-letter answer.
+    assert not any(c.signals.get("solver_match") for c in cands)
+

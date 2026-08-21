@@ -222,20 +222,20 @@ async def create_clue(
         await db.execute(
             select(func.count(Clue.id)).where(
                 Clue.author == clue.author,
-                Clue.legacy_number <= clue.legacy_number,
+                Clue.legacy_number < clue.legacy_number,
             )
         )
-    ).scalar()
+    ).scalar() + 1
 
     if clue.solver:
         clue.clues_by_solver_so_far = (
             await db.execute(
                 select(func.count(Clue.id)).where(
                     Clue.solver == clue.solver,
-                    Clue.legacy_number <= clue.legacy_number,
+                    Clue.legacy_number < clue.legacy_number,
                 )
             )
-        ).scalar()
+        ).scalar() + 1
 
     db.add(clue)
     await db.commit()

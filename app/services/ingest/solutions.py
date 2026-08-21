@@ -254,8 +254,18 @@ def _enum_fit_score(word_lengths: list[int], enumeration: str | None) -> float:
     parts = _enumeration_lengths(enumeration)
     if not parts:
         return 0.0
+    # Single-part enumeration: compare the TOTAL letter count against the
+    # single part, regardless of how many words the extraction produced.
+    # (A multi-word message like "Pseudocode = sue (legally bash) ..." is NOT
+    # a 10-letter answer just because its first word happens to be 10 letters.)
+    if len(parts) == 1:
+        return _delta_to_score(abs(sum(word_lengths) - parts[0]))
+    # Multi-part enumeration: a single flat word (e.g. caps-concat) compares
+    # its total against the *sum* of the parts; a multi-word result (e.g.
+    # caps-words) compares per-word against the parts in order, averaging the
+    # per-part scores (so a partial match ranks above a total miss but below
+    # a full match).
     if len(word_lengths) == 1:
-        # A single flat word matches against the total (sum of parts).
         return _delta_to_score(abs(word_lengths[0] - sum(parts)))
     scores = []
     for i, part in enumerate(parts):

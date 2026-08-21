@@ -122,20 +122,20 @@ async def ingest_clue(
         await db.execute(
             select(func.count(Clue.id)).where(
                 Clue.author == clue.author,
-                Clue.legacy_number <= clue.legacy_number,
+                Clue.legacy_number < clue.legacy_number,
             )
         )
-    ).scalar()
+    ).scalar() + 1
 
     if clue.solver:
         clue.clues_by_solver_so_far = (
             await db.execute(
                 select(func.count(Clue.id)).where(
                     Clue.solver == clue.solver,
-                    Clue.legacy_number <= clue.legacy_number,
+                    Clue.legacy_number < clue.legacy_number,
                 )
             )
-        ).scalar()
+        ).scalar() + 1
 
     db.add(clue)
     await db.commit()
@@ -184,18 +184,18 @@ async def update_clue(
             await db.execute(
                 select(func.count(Clue.id)).where(
                     Clue.author == clue.author,
-                    Clue.legacy_number <= clue.legacy_number,
+                    Clue.legacy_number < clue.legacy_number,
                 )
             )
-        ).scalar()
+        ).scalar() + 1
         clue.clues_by_solver_so_far = (
             await db.execute(
                 select(func.count(Clue.id)).where(
                     Clue.solver == clue.solver,
-                    Clue.legacy_number <= clue.legacy_number,
+                    Clue.legacy_number < clue.legacy_number,
                 )
             )
-        ).scalar() if clue.solver else None
+        ).scalar() + 1 if clue.solver else None
 
     await db.commit()
     await db.refresh(clue)
