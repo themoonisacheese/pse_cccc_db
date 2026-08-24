@@ -126,15 +126,15 @@
     <div class="stats-section">
         <h2>Longest Unsolved</h2>
         <div class="record-card">
-            <div class="record-label">Longest time from posting to being solved ({{ longest_unsolved[5] }} days)</div>
+            <div class="record-label">Longest time from posting to being solved ({{ longest_unsolved[4] }} days)</div>
             <div class="record-value">
-                <a href="/clue/{{ longest_unsolved[0] }}.png">#{{ longest_unsolved[1] or longest_unsolved[0] }}</a> —
-                {{ longest_unsolved[2][:120] }}{% if longest_unsolved[2]|length > 120 %}…{% endif %}
-                {% if longest_unsolved[3] %}
-                <small style="margin-left:0.5em">posted {{ longest_unsolved[3] | rel_date }}</small>
+                <a href="/clue/{{ longest_unsolved[0] }}.png">#{{ longest_unsolved[0] }}</a> —
+                {{ longest_unsolved[1][:120] }}{% if longest_unsolved[1]|length > 120 %}…{% endif %}
+                {% if longest_unsolved[2] %}
+                <small style="margin-left:0.5em">posted {{ longest_unsolved[2] | rel_date }}</small>
                 {% endif %}
-                {% if longest_unsolved[4] %}
-                <small style="margin-left:0.5em">solved {{ longest_unsolved[4] | rel_date }}</small>
+                {% if longest_unsolved[3] %}
+                <small style="margin-left:0.5em">solved {{ longest_unsolved[3] | rel_date }}</small>
                 {% endif %}
             </div>
         </div>
@@ -172,7 +172,7 @@
             </thead>
             <tbody>
                 {% for clue in recent %}
-                <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}.png'">
+                <tr class="clue-row" onclick="window.location='/clue/{{ clue.legacy_number }}.png'">
                     <td class="clue-num">{{ clue.legacy_number }}</td>
                     <td class="clue-text">{{ clue.clue_text[:100] }}{% if clue.clue_text|length > 100 %}…{% endif %}</td>
                     <td>

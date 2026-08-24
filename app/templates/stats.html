@@ -204,13 +204,13 @@
             {% endif %}
             {% if longest_unsolved %}
             <div class="record-card">
-                <div class="record-label">Longest Unsolved ({{ longest_unsolved[6] }} days)</div>
+                <div class="record-label">Longest Unsolved ({{ longest_unsolved[5] }} days)</div>
                 <div class="record-value">
-                    <a href="/clue/{{ longest_unsolved[0] }}.png">{{ longest_unsolved[2][:120] }}{% if longest_unsolved[2]|length > 120 %}…{% endif %}</a>
+                    <a href="/clue/{{ longest_unsolved[0] }}.png">{{ longest_unsolved[1][:120] }}{% if longest_unsolved[1]|length > 120 %}…{% endif %}</a>
                 </div>
                 <div class="record-meta">
-                    #{{ longest_unsolved[1] or longest_unsolved[0] }} by {{ longest_unsolved[3] }}
-                    — {{ longest_unsolved[4] }} → {{ longest_unsolved[5] }}
+                    #{{ longest_unsolved[0] }} by {{ longest_unsolved[2] }}
+                    — {{ longest_unsolved[3] }} → {{ longest_unsolved[4] }}
                 </div>
             </div>
             {% endif %}

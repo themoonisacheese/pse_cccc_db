@@ -409,14 +409,14 @@ async def sequence_detail(request: Request, sequence_id: int):
     return RedirectResponse(url=f"/sequences/{sequence_id}.png", status_code=301)
 
 
-async def _serve_clue_detail_html(request: Request, clue_id: int):
+async def _serve_clue_detail_html(request: Request, legacy_number: int):
     """Render the clue detail HTML page. Called by the .png route for browsers."""
     from sqlalchemy import select, func
     from app.models.clue import Clue
 
     user = getattr(request.state, "user", None)
     async with async_session() as db:
-        result = await db.execute(select(Clue).where(Clue.id == clue_id))
+        result = await db.execute(select(Clue).where(Clue.legacy_number == legacy_number))
         clue = result.scalar_one_or_none()
 
         if not clue:
@@ -454,9 +454,23 @@ async def _serve_clue_detail_html(request: Request, clue_id: int):
 
 @app.get("/clue/{clue_id}", response_class=HTMLResponse)
 async def clue_detail(request: Request, clue_id: int):
-    """Redirect to the canonical .png URL."""
+    """Redirect to the canonical .png URL (by legacy_number)."""
+    from sqlalchemy import select
+    from app.models.clue import Clue
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=f"/clue/{clue_id}.png", status_code=301)
+
+    async with async_session() as db:
+        result = await db.execute(select(Clue).where(Clue.id == clue_id))
+        clue = result.scalar_one_or_none()
+
+    if not clue:
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Clue not found", "user": getattr(request.state, "user", None)},
+            status_code=404,
+        )
+
+    return RedirectResponse(url=f"/clue/{clue.legacy_number}.png", status_code=301)
 
 
 @app.get("/clue/legacy/{legacy_number}", response_class=HTMLResponse)
@@ -483,7 +497,7 @@ async def clue_by_legacy(request: Request, legacy_number: int):
             status_code=404,
         )
 
-    return RedirectResponse(url=f"/clue/{clue.id}.png", status_code=301)
+    return RedirectResponse(url=f"/clue/{legacy_number}.png", status_code=301)
 
 
 @app.get("/clue/{clue_id}/edit", response_class=HTMLResponse)
@@ -745,7 +759,7 @@ async def stats_page(request: Request, period: str = "all"):
         longest_clue = (
             await db.execute(
                 select(
-                    Clue.id,
+                    Clue.legacy_number,
                     Clue.clue_text,
                     func.length(Clue.clue_text).label("len"),
                 )
@@ -757,7 +771,7 @@ async def stats_page(request: Request, period: str = "all"):
         shortest_clue = (
             await db.execute(
                 select(
-                    Clue.id,
+                    Clue.legacy_number,
                     Clue.clue_text,
                     func.length(Clue.clue_text).label("len"),
                 )
@@ -770,7 +784,7 @@ async def stats_page(request: Request, period: str = "all"):
         longest_sol = (
             await db.execute(
                 select(
-                    Clue.id,
+                    Clue.legacy_number,
                     Clue.solution,
                     func.length(Clue.solution).label("len"),
                 )
@@ -785,7 +799,7 @@ async def stats_page(request: Request, period: str = "all"):
         shortest_sol = (
             await db.execute(
                 select(
-                    Clue.id,
+                    Clue.legacy_number,
                     Clue.solution,
                     func.length(Clue.solution).label("len"),
                 )
@@ -800,7 +814,7 @@ async def stats_page(request: Request, period: str = "all"):
         # plus the total count for display.
         empty_sol_row = (
             await db.execute(
-                select(Clue.id, Clue.clue_text)
+                select(Clue.legacy_number, Clue.clue_text)
                 .where(Clue.solution.isnot(None), func.length(Clue.solution) == 0)
                 .order_by(Clue.id)
                 .limit(1)
@@ -833,7 +847,6 @@ async def stats_page(request: Request, period: str = "all"):
         longest_unsolved = (
             await db.execute(
                 select(
-                    Clue.id,
                     Clue.legacy_number,
                     Clue.clue_text,
                     Clue.author,
@@ -1122,7 +1135,6 @@ async def _serve_user_profile_html(request: Request, username: str):
         NextClue = _aliased(Clue)
         longest_unsolved = (await db.execute(
             select(
-                Clue.id,
                 Clue.legacy_number,
                 Clue.clue_text,
                 Clue.clue_date,

@@ -71,7 +71,7 @@
                     <div class="candidate-actions">
                         <button class="btn btn-small btn-approve" hx-post="/api/review/candidates/{{ cand.id }}/approve"
                             hx-swap="none"
-                            hx-on::after-request="if(event.detail.successful) window.location.href="/clue/{{ clue.id }}.png";">
+                            hx-on::after-request="if(event.detail.successful) window.location.href="/clue/{{ clue.legacy_number }}.png";">
                             ✓ Approve
                         </button>
                         <button class="btn btn-small btn-outline btn-reject" hx-post="/api/review/candidates/{{ cand.id }}/reject"
@@ -120,7 +120,7 @@
     {% endif %}
 
     <div class="clue-detail-footer">
-        <a href="/clue/{{ clue.id }}.png" class="btn btn-small btn-outline">← Back to clue</a>
+        <a href="/clue/{{ clue.legacy_number }}.png" class="btn btn-small btn-outline">← Back to clue</a>
         <a href="/search?author=%22{{ clue.author | urlencode }}%22" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
     </div>
 </div>

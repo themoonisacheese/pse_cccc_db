@@ -11,7 +11,7 @@ Detection uses sec-fetch-dest (proven reliable from live SE chat logs):
   - fallback: Accept header    → text/html = browser, image/* = fetcher
 
 Routes:
-  /clue/{clue_id}.png        — clue detail (canonical URL)
+  /clue/{legacy_number}.png        — clue detail (canonical URL)
   /user/{username}.png       — user profile (canonical URL)
   /sequences/{sequence_id}.png — sequence detail (canonical URL)
 """
@@ -58,9 +58,9 @@ def _is_fetcher(request: Request) -> bool:
 
 # ── Clue detail .png ─────────────────────────────────────────
 
-async def _get_clue_data(clue_id: int):
+async def _get_clue_data(legacy_number: int):
     async with async_session() as db:
-        result = await db.execute(select(Clue).where(Clue.id == clue_id))
+        result = await db.execute(select(Clue).where(Clue.legacy_number == legacy_number))
         clue = result.scalar_one_or_none()
         if not clue:
             return None, 0
@@ -76,14 +76,14 @@ async def _get_clue_data(clue_id: int):
         return clue, solution_use_count
 
 
-@router.get("/clue/{clue_id}.png")
-async def clue_png(request: Request, clue_id: int):
+@router.get("/clue/{legacy_number}.png")
+async def clue_png(request: Request, legacy_number: int):
     if not _is_fetcher(request):
         # Browser → serve the real HTML page (delegates to main.py's route)
         from app.main import _serve_clue_detail_html
-        return await _serve_clue_detail_html(request, clue_id)
+        return await _serve_clue_detail_html(request, legacy_number=legacy_number)
 
-    clue, solution_use_count = await _get_clue_data(clue_id)
+    clue, solution_use_count = await _get_clue_data(legacy_number=legacy_number)
     if not clue:
         return Response(content=b"", status_code=404, media_type="image/png")
 
@@ -94,8 +94,8 @@ async def clue_png(request: Request, clue_id: int):
     )
 
 
-@router.head("/clue/{clue_id}.png")
-async def clue_png_head(request: Request, clue_id: int):
+@router.head("/clue/{legacy_number}.png")
+async def clue_png_head(request: Request, legacy_number: int):
     if not _is_fetcher(request):
         return Response(content=b"", media_type="text/html",
                         headers={"Cache-Control": "no-store"})

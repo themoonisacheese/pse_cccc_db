@@ -48,7 +48,7 @@
         </thead>
         <tbody>
             {% for clue in latest_clues %}
-            <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}.png'">
+            <tr class="clue-row" onclick="window.location='/clue/{{ clue.legacy_number }}.png'">
                 <td class="clue-num">{{ clue.legacy_number }}</td>
                 <td class="clue-text">{{ clue.clue_text[:100] }}{% if clue.clue_text|length > 100 %}…{% endif %}</td>
                 <td>{{ clue.author }}{% if user and user.display_name == clue.author %} <span class="its-you-pill">you!</span>{% endif %}</td>
