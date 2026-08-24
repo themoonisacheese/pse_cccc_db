@@ -99,6 +99,21 @@ def _footer(draw):
 
 # ── Clue preview ─────────────────────────────────────────────
 
+def _fit_font(draw, text, max_width, max_lines, max_height, min_size=10,
+              max_size=40, bold=False, mono=False):
+    """Find the largest font size where text fits in max_width × max_height
+    with at most max_lines lines. Returns (font, lines, line_height)."""
+    best_font, best_lines, best_lh = None, [text], max_height
+    for size in range(max_size, min_size - 1, -1):
+        f = _font(size, bold=bold, mono=mono)
+        lh = int(size * 1.28)
+        lines = _wrap(draw, text, f, max_width)
+        if len(lines) <= max_lines and len(lines) * lh <= max_height:
+            return f, lines, lh
+        best_font, best_lines, best_lh = f, lines, lh
+    return best_font, best_lines, best_lh
+
+
 def render_clue(clue, solution_use_count=0) -> bytes:
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
@@ -114,42 +129,77 @@ def render_clue(clue, solution_use_count=0) -> bytes:
 
     draw.line([(PAD, PAD + 22), (W - PAD, PAD + 22)], fill=BORDER, width=1)
 
-    # ── Clue text — the main content, takes ~50% of the image (150px) ──
-    # Start at y=38, give it until y=190 → 152px of vertical space
-    clue_top = PAD + 30           # 46
-    clue_bottom = 190             # leaves 110px for solution + footer
-    clue_h = clue_bottom - clue_top
+    # ── Layout zones ──
+    header_bottom = PAD + 30          # 46
+    footer_top = H - PAD - 44         # 240 (44px for author/solver + pills)
+    middle_h = footer_top - header_bottom  # ~194px
 
-    cf = _font(18)
-    line_h = 24
-    max_clue_lines = clue_h // line_h  # 6 lines
-    lines = _wrap(draw, clue.clue_text or "(no clue text)", cf, W - 2 * PAD)
-    y = clue_top
-    for line in lines[:max_clue_lines]:
-        draw.text((PAD, y), line, fill=FG, font=cf)
-        y += line_h
-    if len(lines) > max_clue_lines:
-        draw.text((PAD, y), "\u2026", fill=FG_DIM, font=cf)
+    clue_text = clue.clue_text or "(no clue text)"
+    solution = clue.solution or ""
 
-    # ── Solution — monospaced green, left-justified, compact ──
-    sol_top = clue_bottom + 6      # 196
-    if clue.solution:
-        sol_font = _font(16, bold=True, mono=True)
-        sol_text = clue.solution
-        if _tw(draw, sol_text, sol_font) <= W - 2 * PAD:
-            # Left-justified, with "ANSWER" label
-            draw.text((PAD, sol_top), "ANSWER", fill=FG_DIM, font=_font(9))
-            draw.text((PAD, sol_top + 12), sol_text, fill=GREEN, font=sol_font)
-        else:
-            # Wrap long solutions (left-justified)
-            sol_lines = _wrap(draw, sol_text, sol_font, W - 2 * PAD)[:2]
-            draw.text((PAD, sol_top), "ANSWER", fill=FG_DIM, font=_font(9))
-            sy = sol_top + 12
-            for sl in sol_lines:
-                draw.text((PAD, sy), sl, fill=GREEN, font=sol_font)
-                sy += 20
+    # ── Allocate space: clue gets ~65%, answer gets ~35% ──
+    # But if there's no solution, clue gets everything.
+    if solution:
+        clue_zone_h = int(middle_h * 0.62)
+        sol_zone_h = middle_h - clue_zone_h
     else:
-        draw.text((PAD, sol_top + 2), "Not yet solved", fill=FG_DIM, font=_font(13))
+        clue_zone_h = middle_h
+        sol_zone_h = 0
+
+    max_w = W - 2 * PAD
+
+    # ── Clue text: scale font to fill clue_zone ──
+    clue_max_lines = max(1, clue_zone_h // 20)  # rough estimate for max lines
+    cf, clue_lines, clue_lh = _fit_font(
+        draw, clue_text, max_w, clue_max_lines, clue_zone_h,
+        min_size=12, max_size=30)
+
+    # If clue text still doesn't fit, truncate last line
+    clue_fits = clue_lh * len(clue_lines) <= clue_zone_h
+    if not clue_fits:
+        # Recalculate max lines that fit
+        max_fit_lines = clue_zone_h // clue_lh
+        if max_fit_lines < 1:
+            max_fit_lines = 1
+        clue_lines = clue_lines[:max_fit_lines]
+        if len(clue_lines) < len(_wrap(draw, clue_text, cf, max_w)):
+            # Add ellipsis to last line
+            last = clue_lines[-1]
+            clue_lines[-1] = _trunc(last + "\u2026", draw, cf, max_w)
+
+    # Draw clue text, vertically centered in its zone
+    total_clue_h = clue_lh * len(clue_lines)
+    cy = header_bottom + (clue_zone_h - total_clue_h) // 2
+    for line in clue_lines:
+        draw.text((PAD, cy), line, fill=FG, font=cf)
+        cy += clue_lh
+
+    # ── Solution: scale font to fill sol_zone ──
+    sol_top = header_bottom + clue_zone_h
+    if solution:
+        sol_max_lines = max(1, sol_zone_h // 18)
+        sf, sol_lines, sol_lh = _fit_font(
+            draw, solution, max_w, sol_max_lines, sol_zone_h - 14,  # 14px for label
+            min_size=10, max_size=28, bold=True, mono=True)
+
+        # Truncate if needed
+        if sol_lh * len(sol_lines) > sol_zone_h - 14:
+            max_sol_lines = max(1, (sol_zone_h - 14) // sol_lh)
+            sol_lines = sol_lines[:max_sol_lines]
+            if len(sol_lines) < len(_wrap(draw, solution, sf, max_w)):
+                sol_lines[-1] = _trunc(sol_lines[-1] + "\u2026", draw, sf, max_w)
+
+        # Draw ANSWER label + solution, vertically centered in zone
+        total_sol_h = 14 + sol_lh * len(sol_lines)
+        sy = sol_top + (sol_zone_h - total_sol_h) // 2
+        draw.text((PAD, sy), "ANSWER", fill=FG_DIM, font=_font(9))
+        sy += 14
+        for sl in sol_lines:
+            draw.text((PAD, sy), sl, fill=GREEN, font=sf)
+            sy += sol_lh
+    else:
+        draw.text((PAD, sol_top + (sol_zone_h - 16) // 2), "Not yet solved",
+                  fill=FG_DIM, font=_font(13))
 
     # ── Footer: author and solver, both blue, at the bottom ──
     fy = H - PAD - 24
@@ -167,7 +217,7 @@ def render_clue(clue, solution_use_count=0) -> bytes:
     draw.text((W - PAD - sw, fy), "SOLVER", fill=FG_DIM, font=lf)
     draw.text((W - PAD - sw, fy + 12), solver_disp, fill=ACCENT, font=pf)
 
-    # ── Meta pills (compact, right of author or left of solver) ──
+    # ── Meta pills (compact, centered between author and solver) ──
     mf = _font(9)
     tags = []
     if clue.clue_length:
@@ -178,9 +228,8 @@ def render_clue(clue, solution_use_count=0) -> bytes:
         tags.append(f"#{clue.clues_by_solver_so_far} by solver")
     if solution_use_count and solution_use_count > 1:
         tags.append(f"solution {solution_use_count}\u00d7")
-    # Place pills between author and solver, centered
     if tags:
-        total_pw = sum(_tw(draw, t, mf) + 18 for t in tags) - 6  # pw = tw + 12, gap = 6
+        total_pw = sum(_tw(draw, t, mf) + 18 for t in tags) - 6
         tx = (W - total_pw) // 2
     else:
         tx = 0
