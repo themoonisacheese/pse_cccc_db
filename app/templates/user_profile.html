@@ -64,10 +64,10 @@
             </thead>
             <tbody>
                 {% for seq, count in author_sequences %}
-                <tr class="seq-row" onclick="window.location='/sequences/{{ seq.id }}'">
+                <tr class="seq-row" onclick="window.location='/sequences/{{ seq.id }}.png'">
                     <td>{{ loop.index }}</td>
                     <td>
-                        <a href="/sequences/{{ seq.id }}">{{ seq.name or '(unnamed sequence)' }}</a>
+                        <a href="/sequences/{{ seq.id }}.png">{{ seq.name or '(unnamed sequence)' }}</a>
                         {% if seq.seq_type == 'author' %}
                         <span class="badge badge-owner">author</span>
                         {% endif %}
@@ -93,7 +93,7 @@
                         {% for row in solved_most %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td><a href="/user/{{ row[0] }}">{{ row[0] }}</a></td>
+                            <td><a href="/user/{{ row[0] }}.png">{{ row[0] }}</a></td>
                             <td>{{ row[1] }}</td>
                         </tr>
                         {% endfor %}
@@ -110,7 +110,7 @@
                         {% for row in solves_you %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td><a href="/user/{{ row[0] }}">{{ row[0] }}</a></td>
+                            <td><a href="/user/{{ row[0] }}.png">{{ row[0] }}</a></td>
                             <td>{{ row[1] }}</td>
                         </tr>
                         {% endfor %}
@@ -128,7 +128,7 @@
         <div class="record-card">
             <div class="record-label">Longest time from posting to being solved ({{ longest_unsolved[5] }} days)</div>
             <div class="record-value">
-                <a href="/clue/{{ longest_unsolved[0] }}">#{{ longest_unsolved[1] or longest_unsolved[0] }}</a> —
+                <a href="/clue/{{ longest_unsolved[0] }}.png">#{{ longest_unsolved[1] or longest_unsolved[0] }}</a> —
                 {{ longest_unsolved[2][:120] }}{% if longest_unsolved[2]|length > 120 %}…{% endif %}
                 {% if longest_unsolved[3] %}
                 <small style="margin-left:0.5em">posted {{ longest_unsolved[3] | rel_date }}</small>
@@ -172,7 +172,7 @@
             </thead>
             <tbody>
                 {% for clue in recent %}
-                <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}'">
+                <tr class="clue-row" onclick="window.location='/clue/{{ clue.id }}.png'">
                     <td class="clue-num">{{ clue.legacy_number }}</td>
                     <td class="clue-text">{{ clue.clue_text[:100] }}{% if clue.clue_text|length > 100 %}…{% endif %}</td>
                     <td>
@@ -180,9 +180,9 @@
                     </td>
                     <td>
                         {% if clue.author == profile_name %}
-                            <a href="/user/{{ clue.solver }}">{{ clue.solver or '—' }}</a>
+                            <a href="/user/{{ clue.solver }}.png">{{ clue.solver or '—' }}</a>
                         {% else %}
-                            <a href="/user/{{ clue.author }}">{{ clue.author }}</a>
+                            <a href="/user/{{ clue.author }}.png">{{ clue.author }}</a>
                         {% endif %}
                     </td>
                     <td title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</td>

@@ -72,7 +72,7 @@
         });
         const res = await resp.json().catch(() => ({}));
         if (resp.ok) {
-            window.location.href = '/sequences/' + res.id;
+            window.location.href = '/sequences/' + res.id + '.png';
         } else {
             document.getElementById('new-seq-result').innerHTML =
                 `<p class="error">${res.detail || 'Could not create'}</p>`;
@@ -86,7 +86,7 @@
         <div class="sequence-card {{ 'seq-author' if seq.seq_type == 'author' else ('seq-tag' if seq.seq_type == 'tag' else 'seq-theme') }}"
              style="{{ '--seq-color:' + seq.color if seq.color }}">
             <div class="sequence-card-title">
-                <a href="/sequences/{{ seq.id }}" class="sequence-name">
+                <a href="/sequences/{{ seq.id }}.png" class="sequence-name">
                     {{ seq.name or 'Unnamed sequence' }}
                 </a>
                 <span class="badge {{ 'badge-owner' if seq.seq_type == 'author' else 'badge' }}">

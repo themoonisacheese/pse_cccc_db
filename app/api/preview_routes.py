@@ -1,24 +1,31 @@
 """Content-negotiated .png routes for embeddable CCCC pages.
 
 Serves a server-rendered PNG preview to image fetchers (SE chat) and
-the real HTML page to browsers, all from URLs ending in .png.
+the real HTML page directly to browsers — all from URLs ending in .png.
+This makes .png the canonical URL so users can copy-paste from the
+browser address bar straight into SE chat.
 
 Detection uses sec-fetch-dest (proven reliable from live SE chat logs):
   - sec-fetch-dest: image    → image fetcher → serve PNG
-  - sec-fetch-dest: document  → browser      → serve HTML (redirect to real page)
+  - sec-fetch-dest: document  → browser      → serve HTML page
   - fallback: Accept header    → text/html = browser, image/* = fetcher
 
 Routes:
-  /clue/{clue_id}.png        — clue detail preview
-  /user/{username}.png       — user profile preview
-  /sequences/{seq_id}.png    — sequence detail preview
+  /clue/{clue_id}.png        — clue detail (canonical URL)
+  /user/{username}.png       — user profile (canonical URL)
+  /sequences/{sequence_id}.png — sequence detail (canonical URL)
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
 
+from app.db.session import async_session
+from app.models.clue import Clue
+from app.models.sequence import Sequence
 from app.services.preview_renderer import (
     render_clue,
     render_user_profile,
@@ -51,20 +58,12 @@ def _is_fetcher(request: Request) -> bool:
 
 # ── Clue detail .png ─────────────────────────────────────────
 
-@router.get("/clue/{clue_id}.png")
-async def clue_png(request: Request, clue_id: int):
-    if not _is_fetcher(request):
-        return RedirectResponse(url=f"/clue/{clue_id}", status_code=302)
-
-    from sqlalchemy import select, func
-    from app.models.clue import Clue
-    from app.db.session import async_session
-
+async def _get_clue_data(clue_id: int):
     async with async_session() as db:
         result = await db.execute(select(Clue).where(Clue.id == clue_id))
         clue = result.scalar_one_or_none()
         if not clue:
-            return Response(content=b"", status_code=404, media_type="image/png")
+            return None, 0
 
         solution_use_count = 0
         if clue.solution and clue.solution.strip():
@@ -74,10 +73,22 @@ async def clue_png(request: Request, clue_id: int):
                     select(func.count(Clue.id)).where(func.lower(Clue.solution) == exact)
                 )
             ).scalar() or 0
+        return clue, solution_use_count
 
-    png_bytes = render_clue(clue, solution_use_count)
+
+@router.get("/clue/{clue_id}.png")
+async def clue_png(request: Request, clue_id: int):
+    if not _is_fetcher(request):
+        # Browser → serve the real HTML page (delegates to main.py's route)
+        from app.main import _serve_clue_detail_html
+        return await _serve_clue_detail_html(request, clue_id)
+
+    clue, solution_use_count = await _get_clue_data(clue_id)
+    if not clue:
+        return Response(content=b"", status_code=404, media_type="image/png")
+
     return Response(
-        content=png_bytes,
+        content=render_clue(clue, solution_use_count),
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=300"},
     )
@@ -86,22 +97,15 @@ async def clue_png(request: Request, clue_id: int):
 @router.head("/clue/{clue_id}.png")
 async def clue_png_head(request: Request, clue_id: int):
     if not _is_fetcher(request):
-        return Response(content=b"", media_type="text/html", status_code=302,
-                        headers={"Location": f"/clue/{clue_id}"})
+        return Response(content=b"", media_type="text/html",
+                        headers={"Cache-Control": "no-store"})
     return Response(content=b"", media_type="image/png",
                     headers={"Cache-Control": "public, max-age=300"})
 
 
 # ── User profile .png ────────────────────────────────────────
 
-@router.get("/user/{username}.png")
-async def user_png(request: Request, username: str):
-    if not _is_fetcher(request):
-        return RedirectResponse(url=f"/user/{username}", status_code=302)
-
-    from sqlalchemy import select, func, or_
-    from app.models.clue import Clue
-    from app.db.session import async_session
+async def _get_user_data(username: str):
     from app.main import _streak_from_numbers, _day_streak
 
     async with async_session() as db:
@@ -114,7 +118,7 @@ async def user_png(request: Request, username: str):
         )).scalar() or 0
 
         if authored == 0 and solved == 0:
-            return Response(content=b"", status_code=404, media_type="image/png")
+            return None
 
         first_date = (await db.execute(
             select(func.min(Clue.clue_date)).where(
@@ -157,13 +161,30 @@ async def user_png(request: Request, username: str):
         )).all()]
         max_day_streak, _ = _day_streak(active_dates)
 
-    png_bytes = render_user_profile(
-        username, authored, solved, rank,
-        max_streak, current_streak, max_day_streak,
-        first_date, last_date,
-    )
+    return {
+        "username": username, "authored": authored, "solved": solved,
+        "rank": rank, "max_streak": max_streak, "current_streak": current_streak,
+        "max_day_streak": max_day_streak, "first_date": first_date,
+        "last_date": last_date,
+    }
+
+
+@router.get("/user/{username}.png")
+async def user_png(request: Request, username: str):
+    if not _is_fetcher(request):
+        from app.main import _serve_user_profile_html
+        return await _serve_user_profile_html(request, username)
+
+    data = await _get_user_data(username)
+    if not data:
+        return Response(content=b"", status_code=404, media_type="image/png")
+
     return Response(
-        content=png_bytes,
+        content=render_user_profile(
+            data["username"], data["authored"], data["solved"], data["rank"],
+            data["max_streak"], data["current_streak"], data["max_day_streak"],
+            data["first_date"], data["last_date"],
+        ),
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=300"},
     )
@@ -172,24 +193,15 @@ async def user_png(request: Request, username: str):
 @router.head("/user/{username}.png")
 async def user_png_head(request: Request, username: str):
     if not _is_fetcher(request):
-        return Response(content=b"", media_type="text/html", status_code=302,
-                        headers={"Location": f"/user/{username}"})
+        return Response(content=b"", media_type="text/html",
+                        headers={"Cache-Control": "no-store"})
     return Response(content=b"", media_type="image/png",
                     headers={"Cache-Control": "public, max-age=300"})
 
 
 # ── Sequence detail .png ─────────────────────────────────────
 
-@router.get("/sequences/{sequence_id}.png")
-async def sequence_png(request: Request, sequence_id: int):
-    if not _is_fetcher(request):
-        return RedirectResponse(url=f"/sequences/{sequence_id}", status_code=302)
-
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-    from app.models.sequence import Sequence
-    from app.db.session import async_session
-
+async def _get_sequence_data(sequence_id: int):
     async with async_session() as db:
         result = await db.execute(
             select(Sequence)
@@ -198,13 +210,23 @@ async def sequence_png(request: Request, sequence_id: int):
         )
         seq = result.scalar_one_or_none()
         if not seq:
-            return Response(content=b"", status_code=404, media_type="image/png")
-
+            return None, None
         clues = sorted((seq.clues or []), key=lambda c: (c.legacy_number or 0))
+        return seq, clues
 
-    png_bytes = render_sequence(seq, clues)
+
+@router.get("/sequences/{sequence_id}.png")
+async def sequence_png(request: Request, sequence_id: int):
+    if not _is_fetcher(request):
+        from app.main import _serve_sequence_detail_html
+        return await _serve_sequence_detail_html(request, sequence_id)
+
+    seq, clues = await _get_sequence_data(sequence_id)
+    if not seq:
+        return Response(content=b"", status_code=404, media_type="image/png")
+
     return Response(
-        content=png_bytes,
+        content=render_sequence(seq, clues),
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=300"},
     )
@@ -213,7 +235,7 @@ async def sequence_png(request: Request, sequence_id: int):
 @router.head("/sequences/{sequence_id}.png")
 async def sequence_png_head(request: Request, sequence_id: int):
     if not _is_fetcher(request):
-        return Response(content=b"", media_type="text/html", status_code=302,
-                        headers={"Location": f"/sequences/{sequence_id}"})
+        return Response(content=b"", media_type="text/html",
+                        headers={"Cache-Control": "no-store"})
     return Response(content=b"", media_type="image/png",
                     headers={"Cache-Control": "public, max-age=300"})

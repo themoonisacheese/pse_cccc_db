@@ -96,7 +96,7 @@ document.getElementById('clue-form').addEventListener('submit', async (e) => {
     });
     if (resp.ok) {
         const clue = await resp.json();
-        window.location.href = '/clue/' + clue.id;
+        window.location.href = '/clue/' + clue.id + '.png';
     } else {
         const err = await resp.json();
         alert('Error: ' + JSON.stringify(err));

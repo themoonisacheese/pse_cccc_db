@@ -1,10 +1,11 @@
 """Server-side preview image renderer for CCCC embeddable pages.
 
-Generates PNG preview images for clue, user, and sequence pages so they
-can be embedded in SE chat. The images use the site's Tokyo Night-inspired
-dark theme (matching style.css) and show the vital info from each page.
+Generates compact PNG preview images for clue, user, and sequence pages so
+they can be embedded in SE chat. SE chat displays images at ~300x150, so we
+render at 600x300 (2:1 aspect ratio) and pack text densely to maximize
+legibility at that small display size.
 
-Used by the content-negotiated .png routes in main.py.
+Uses the site's Tokyo Night-inspired dark theme (matching style.css).
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ ACCENT = (122, 162, 247)   # #7aa2f7
 GREEN = (158, 206, 106)    # #9ece6a
 RED = (247, 118, 142)      # #f7768e
 YELLOW = (224, 175, 104)  # #e0af68
-ORANGE = (255, 158, 100)  # #ff9e64
+ORANGE = (255, 158, 100)   # #ff9e64
 BORDER = (42, 46, 63)      # #2a2e3f
 
 # ── Fonts ────────────────────────────────────────────────────
@@ -33,24 +34,29 @@ _FONT_SANS = "DejaVuSans.ttf"
 _FONT_SANS_BOLD = "DejaVuSans-Bold.ttf"
 _FONT_MONO = "DejaVuSansMono.ttf"
 
+# ── Canvas dimensions ────────────────────────────────────────
+# SE chat displays at ~300x150; we render at 2x for sharpness.
+W, H = 600, 300
+PAD = 16  # outer padding
 
-def _font(size, bold=False, mono=False):
+
+def _font(size: int, bold=False, mono=False) -> ImageFont.FreeTypeFont:
     if mono:
         return ImageFont.truetype(_FONT_MONO, size)
     return ImageFont.truetype(_FONT_SANS_BOLD if bold else _FONT_SANS, size)
 
 
-def _text_width(draw, text, font):
+def _tw(draw: ImageDraw.ImageDraw, text: str, font) -> int:
     return draw.textbbox((0, 0), text, font=font)[2]
 
 
-def _wrap_text(text, font, draw, max_width):
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    """Word-wrap text to fit max_width. Returns list of lines."""
     words = text.split()
-    lines = []
-    current = []
+    lines, current = [], []
     for word in words:
         test = " ".join(current + [word])
-        if _text_width(draw, test, font) <= max_width or not current:
+        if _tw(draw, test, font) <= max_width or not current:
             current.append(word)
         else:
             lines.append(" ".join(current))
@@ -60,49 +66,65 @@ def _wrap_text(text, font, draw, max_width):
     return lines
 
 
-def _truncate(text, max_len):
-    return text[:max_len] + "\u2026" if len(text) > max_len else text
+def _trunc(text: str, draw: ImageDraw.ImageDraw, font, max_width: int) -> str:
+    """Truncate text with ellipsis to fit max_width."""
+    if _tw(draw, text, font) <= max_width:
+        return text
+    ellipsis = "\u2026"
+    while text and _tw(draw, text + ellipsis, font) > max_width:
+        text = text[:-1]
+    return text + ellipsis if text else ""
 
 
-def _draw_card(draw, x, y, w, h):
-    draw.rounded_rectangle([x, y, x + w, y + h], radius=8, fill=BG_CARD, outline=BORDER)
+def _card(draw, x, y, w, h, fill=BG_CARD, outline=BORDER):
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=6, fill=fill, outline=outline)
 
 
-def _draw_stat_card(draw, x, y, w, h, value, label, value_font, label_font):
-    _draw_card(draw, x, y, w, h)
-    cx = x + w // 2
-    vb = value_font.getbbox(value)
-    vw = vb[2] - vb[0]
-    vh = vb[3] - vb[1]
-    draw.text((cx - vw // 2, y + 12), value, fill=ACCENT, font=value_font)
-    lb = label_font.getbbox(label)
-    lw = lb[2] - lb[0]
-    draw.text((cx - lw // 2, y + 12 + vh + 6), label, fill=FG_DIM, font=label_font)
+def _pill(draw, x, y, text, font, fill=BG_CARD, outline=BORDER, text_color=FG_DIM):
+    """Draw a rounded pill badge. Returns the width consumed."""
+    tw = _tw(draw, text, font)
+    pw = tw + 12
+    draw.rounded_rectangle([x, y, x + pw, y + font.size + 6], radius=(font.size + 6) // 2,
+                           fill=fill, outline=outline)
+    draw.text((x + 6, y + 1), text, fill=text_color, font=font)
+    return pw
 
 
-def render_clue(clue, solution_use_count=0):
-    W, H = 800, 400
+def _footer(draw):
+    """Draw the site name in the bottom-right corner."""
+    fb = _font(10)
+    tw = _tw(draw, "cccc.poggers.website", fb)
+    draw.text((W - PAD - tw, H - PAD - 12), "cccc.poggers.website", fill=FG_DIM, font=fb)
+
+
+# ── Clue preview ─────────────────────────────────────────────
+
+def render_clue(clue, solution_use_count=0) -> bytes:
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
 
+    # ── Header: "Clue #N" + date ──
     title = f"Clue #{clue.legacy_number or clue.id}"
-    draw.text((24, 20), title, fill=FG, font=_font(28, bold=True))
+    draw.text((PAD, PAD), title, fill=FG, font=_font(22, bold=True))
 
     if clue.clue_date:
         ds = clue.clue_date.strftime("%Y-%m-%d") if isinstance(clue.clue_date, date) else str(clue.clue_date)
-        dw = _text_width(draw, ds, _font(14))
-        draw.text((W - 24 - dw, 26), ds, fill=FG_DIM, font=_font(14))
+        dw = _tw(draw, ds, _font(12))
+        draw.text((W - PAD - dw, PAD + 4), ds, fill=FG_DIM, font=_font(12))
 
-    draw.line([(24, 64), (W - 24, 64)], fill=BORDER, width=1)
+    draw.line([(PAD, PAD + 30), (W - PAD, PAD + 30)], fill=BORDER, width=1)
 
-    y = 80
-    cf = _font(18)
-    for line in _wrap_text(clue.clue_text or "(no clue text)", cf, draw, W - 48)[:6]:
-        draw.text((24, y), line, fill=FG, font=cf)
-        y += 26
+    # ── Clue text (wrapped, up to 4 lines) ──
+    y = PAD + 38
+    cf = _font(14)
+    lines = _wrap(draw, clue.clue_text or "(no clue text)", cf, W - 2 * PAD)[:4]
+    for line in lines:
+        draw.text((PAD, y), line, fill=FG, font=cf)
+        y += 19
 
-    y += 8
-    mf = _font(13)
+    # ── Meta pills ──
+    y += 4
+    mf = _font(10)
     tags = []
     if clue.clue_length:
         tags.append(f"{clue.clue_length} chars")
@@ -110,124 +132,159 @@ def render_clue(clue, solution_use_count=0):
         tags.append(f"#{clue.clues_by_author_so_far} by author")
     if clue.clues_by_solver_so_far:
         tags.append(f"#{clue.clues_by_solver_so_far} by solver")
-    tx = 24
+    if solution_use_count and solution_use_count > 1:
+        tags.append(f"solution {solution_use_count}\u00d7")
+    tx = PAD
     for tag in tags:
-        tw = _text_width(draw, tag, mf)
-        draw.rounded_rectangle([tx, y, tx + tw + 16, y + 22], radius=11, fill=BG_CARD, outline=BORDER)
-        draw.text((tx + 8, y + 3), tag, fill=FG_DIM, font=mf)
-        tx += tw + 24
+        pw = _pill(draw, tx, y, tag, mf)
+        tx += pw + 6
 
-    y += 40
-    cw = (W - 48 - 32) // 3
-    lf = _font(12)
-    vf = _font(16, bold=True)
+    # ── Bottom section: 3 columns (author / solver / solution) ──
+    col_y = H - PAD - 70
+    col_w = (W - 2 * PAD - 16) // 3
+    lf = _font(9)
+    vf = _font(13, bold=True)
+    sf = _font(11)
 
-    _draw_card(draw, 24, y, cw, 80)
-    draw.text((36, y + 10), "AUTHOR", fill=FG_DIM, font=lf)
-    draw.text((36, y + 30), _truncate(clue.author or "\u2014", 20), fill=ACCENT, font=vf)
+    # Author
+    _card(draw, PAD, col_y, col_w, 70)
+    draw.text((PAD + 8, col_y + 6), "AUTHOR", fill=FG_DIM, font=lf)
+    draw.text((PAD + 8, col_y + 22), _trunc(clue.author or "\u2014", draw, vf, col_w - 16), fill=ACCENT, font=vf)
 
-    sx = 24 + cw + 16
-    _draw_card(draw, sx, y, cw, 80)
-    draw.text((sx + 12, y + 10), "SOLVER", fill=FG_DIM, font=lf)
-    draw.text((sx + 12, y + 30), _truncate(clue.solver or "\u2014", 20), fill=GREEN if clue.solver else FG_DIM, font=vf)
+    # Solver
+    sx = PAD + col_w + 8
+    _card(draw, sx, col_y, col_w, 70)
+    draw.text((sx + 8, col_y + 6), "SOLVER", fill=FG_DIM, font=lf)
+    solver_color = GREEN if clue.solver else FG_DIM
+    draw.text((sx + 8, col_y + 22), _trunc(clue.solver or "\u2014", draw, vf, col_w - 16), fill=solver_color, font=vf)
 
-    sx2 = sx + cw + 16
-    _draw_card(draw, sx2, y, cw, 80)
-    draw.text((sx2 + 12, y + 10), "SOLUTION", fill=FG_DIM, font=lf)
+    # Solution
+    sx2 = sx + col_w + 8
+    _card(draw, sx2, col_y, col_w, 70)
+    draw.text((sx2 + 8, col_y + 6), "SOLUTION", fill=FG_DIM, font=lf)
     if clue.solution:
-        draw.text((sx2 + 12, y + 30), _truncate(clue.solution, 20), fill=YELLOW, font=vf)
+        draw.text((sx2 + 8, col_y + 22), _trunc(clue.solution, draw, vf, col_w - 16), fill=YELLOW, font=vf)
         if clue.answer_length:
-            draw.text((sx2 + 12, y + 56), f"{clue.answer_length} letters", fill=FG_DIM, font=_font(12))
+            draw.text((sx2 + 8, col_y + 44), f"{clue.answer_length} letters", fill=FG_DIM, font=sf)
     else:
-        draw.text((sx2 + 12, y + 30), "Not yet solved", fill=FG_DIM, font=_font(14))
+        draw.text((sx2 + 8, col_y + 22), "Not yet solved", fill=FG_DIM, font=sf)
 
-    draw.text((24, H - 28), "cccc.poggers.website", fill=FG_DIM, font=_font(12))
+    _footer(draw)
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
-def render_user_profile(username, authored, solved, rank, max_streak, current_streak, max_day_streak, first_date, last_date):
-    W, H = 800, 400
+# ── User profile preview ──────────────────────────────────────
+
+def render_user_profile(username, authored, solved, rank,
+                        max_streak, current_streak, max_day_streak,
+                        first_date, last_date) -> bytes:
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
 
-    draw.text((24, 20), username, fill=FG, font=_font(28, bold=True))
+    # ── Header: username + tenure ──
+    draw.text((PAD, PAD), _trunc(username, draw, _font(22, bold=True), W - 2 * PAD), fill=FG, font=_font(22, bold=True))
 
     if first_date:
         tenure = f"Active {first_date} \u2192 {last_date}"
-        tw = _text_width(draw, tenure, _font(14))
-        draw.text((W - 24 - tw, 26), tenure, fill=FG_DIM, font=_font(14))
+        tw = _tw(draw, tenure, _font(11))
+        draw.text((W - PAD - tw, PAD + 6), tenure, fill=FG_DIM, font=_font(11))
 
-    draw.line([(24, 64), (W - 24, 64)], fill=BORDER, width=1)
+    draw.line([(PAD, PAD + 30), (W - PAD, PAD + 30)], fill=BORDER, width=1)
 
-    y = 84
-    cw = (W - 48 - 32) // 3
-    ch = 80
+    # ── 2 rows of 3 stat cards ──
+    card_w = (W - 2 * PAD - 16) // 3
+    card_h = 56
+    y1 = PAD + 38
+    y2 = y1 + card_h + 8
 
-    _draw_stat_card(draw, 24, y, cw, ch, f"{authored:,}", "Clues Authored", _font(28, bold=True), _font(13))
-    _draw_stat_card(draw, 24 + cw + 16, y, cw, ch, f"#{rank}" if rank else "\u2014", "Leaderboard Rank", _font(28, bold=True), _font(13))
-    _draw_stat_card(draw, 24 + (cw + 16) * 2, y, cw, ch, f"{solved:,}", "Clues Solved", _font(28, bold=True), _font(13))
+    def _stat(x, y, value, label):
+        _card(draw, x, y, card_w, card_h)
+        vf = _font(20, bold=True)
+        lf = _font(9)
+        draw.text((x + 8, y + 6), label, fill=FG_DIM, font=lf)
+        draw.text((x + 8, y + 22), _trunc(value, draw, vf, card_w - 16), fill=ACCENT, font=vf)
 
-    y2 = y + ch + 16
-    _draw_stat_card(draw, 24, y2, cw, ch, str(max_streak), "Biggest Streak", _font(28, bold=True), _font(13))
-    _draw_stat_card(draw, 24 + cw + 16, y2, cw, ch, str(current_streak), "Current Streak", _font(28, bold=True), _font(13))
-    _draw_stat_card(draw, 24 + (cw + 16) * 2, y2, cw, ch, str(max_day_streak), "Biggest Day Streak", _font(28, bold=True), _font(13))
+    _stat(PAD, y1, f"{authored:,}", "AUTHORED")
+    _stat(PAD + card_w + 8, y1, f"#{rank}" if rank else "\u2014", "RANK")
+    _stat(PAD + (card_w + 8) * 2, y1, f"{solved:,}", "SOLVED")
 
-    draw.text((24, H - 28), "cccc.poggers.website", fill=FG_DIM, font=_font(12))
+    _stat(PAD, y2, str(max_streak), "MAX STREAK")
+    _stat(PAD + card_w + 8, y2, str(current_streak), "CURRENT STREAK")
+    _stat(PAD + (card_w + 8) * 2, y2, str(max_day_streak), "MAX DAY STREAK")
+
+    _footer(draw)
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
-def render_sequence(seq, clues):
-    W, H = 800, 400
+# ── Sequence preview ──────────────────────────────────────────
+
+def render_sequence(seq, clues) -> bytes:
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
 
+    # ── Header: name + type badge ──
     name = seq.name or "Unnamed sequence"
-    draw.text((24, 20), _truncate(name, 40), fill=FG, font=_font(24, bold=True))
+    nf = _font(18, bold=True)
+    name_disp = _trunc(name, draw, nf, W - 2 * PAD - 80)
+    draw.text((PAD, PAD), name_disp, fill=FG, font=nf)
 
+    # Type badge
     type_label = "Author" if seq.seq_type == "author" else ("Tag" if seq.seq_type == "tag" else "Theme")
-    bf = _font(12, bold=True)
-    bw = _text_width(draw, type_label, bf)
-    bx = 24 + _text_width(draw, _truncate(name, 40), _font(24, bold=True)) + 12
     bc = ACCENT if seq.seq_type == "author" else (ORANGE if seq.seq_type == "tag" else GREEN)
-    draw.rounded_rectangle([bx, 26, bx + bw + 16, 48], radius=11, fill=BG_CARD, outline=bc)
-    draw.text((bx + 8, 29), type_label, fill=bc, font=bf)
+    bf = _font(9, bold=True)
+    bx = PAD + _tw(draw, name_disp, nf) + 8
+    _pill(draw, bx, PAD + 4, type_label, bf, fill=BG_CARD, outline=bc, text_color=bc)
 
-    y = 56
+    # Meta line
+    y = PAD + 26
     parts = [f"{len(clues)} clue{'s' if len(clues) != 1 else ''}"]
     if seq.author:
         parts.append(f"by {seq.author}")
-    draw.text((24, y), " \u00b7 ".join(parts), fill=FG_DIM, font=_font(14))
+    draw.text((PAD, y), " \u00b7 ".join(parts), fill=FG_DIM, font=_font(11))
 
-    draw.line([(24, 82), (W - 24, 82)], fill=BORDER, width=1)
+    draw.line([(PAD, y + 16), (W - PAD, y + 16)], fill=BORDER, width=1)
 
-    y = 96
-    hf = _font(12)
-    rf = _font(14)
-    sf = _font(14, mono=True)
+    # ── Member clue table ──
+    y = y + 22
+    hf = _font(9)
+    rf = _font(11)
+    sf = _font(11, mono=True)
 
-    draw.text((24, y), "#", fill=FG_DIM, font=hf)
-    draw.text((80, y), "Clue", fill=FG_DIM, font=hf)
-    draw.text((560, y), "Author", fill=FG_DIM, font=hf)
-    draw.text((680, y), "Solution", fill=FG_DIM, font=hf)
-    y += 20
+    # Column positions
+    c_num = PAD
+    c_clue = PAD + 36
+    c_author = W - PAD - 140
+    c_solution = W - PAD - 60
+    clue_w = c_author - c_clue - 8
 
-    for i, c in enumerate(clues[:8]):
+    # Header row
+    draw.text((c_num, y), "#", fill=FG_DIM, font=hf)
+    draw.text((c_clue, y), "Clue", fill=FG_DIM, font=hf)
+    draw.text((c_author, y), "Author", fill=FG_DIM, font=hf)
+    draw.text((c_solution, y), "Solution", fill=FG_DIM, font=hf)
+    y += 14
+
+    row_h = 18
+    max_rows = (H - PAD - y - 20) // row_h
+    for i, c in enumerate(clues[:max_rows]):
+        ry = y + i * row_h
         if i % 2 == 0:
-            draw.rectangle([20, y, W - 20, y + 24], fill=BG_SOFT)
-        draw.text((24, y + 2), str(c.legacy_number or "\u2014"), fill=FG_DIM, font=rf)
-        draw.text((80, y + 2), _truncate(c.clue_text or "", 55), fill=FG, font=rf)
-        draw.text((560, y + 2), _truncate(c.author or "\u2014", 14), fill=ACCENT, font=rf)
-        draw.text((680, y + 2), _truncate(c.solution or "(not solved)", 14), fill=YELLOW if c.solution else FG_DIM, font=sf)
-        y += 24
+            draw.rectangle([PAD - 2, ry, W - PAD + 2, ry + row_h - 1], fill=BG_SOFT)
+        draw.text((c_num, ry + 1), str(c.legacy_number or "\u2014"), fill=FG_DIM, font=rf)
+        draw.text((c_clue, ry + 1), _trunc(c.clue_text or "", draw, rf, clue_w), fill=FG, font=rf)
+        draw.text((c_author, ry + 1), _trunc(c.author or "\u2014", draw, rf, 70), fill=ACCENT, font=rf)
+        sol_text = c.solution or "(unsolved)"
+        draw.text((c_solution, ry + 1), _trunc(sol_text, draw, sf, 56), fill=YELLOW if c.solution else FG_DIM, font=sf)
 
-    if len(clues) > 8:
-        draw.text((24, y + 4), f"\u2026 and {len(clues) - 8} more", fill=FG_DIM, font=_font(13))
+    if len(clues) > max_rows:
+        draw.text((PAD, y + max_rows * row_h + 2), f"\u2026 and {len(clues) - max_rows} more",
+                  fill=FG_DIM, font=_font(10))
 
-    draw.text((24, H - 28), "cccc.poggers.website", fill=FG_DIM, font=_font(12))
+    _footer(draw)
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()

@@ -21,7 +21,7 @@
         <div class="detail-grid">
             <div class="detail-section">
                 <h3>Author</h3>
-                <p><a href="/user/{{ clue.author }}">{{ clue.author }}</a></p>
+                <p><a href="/user/{{ clue.author }}.png">{{ clue.author }}</a></p>
             </div>
             <div class="detail-section">
                 <h3>Status</h3>
@@ -58,7 +58,7 @@
                             {% endfor %}
                         </div>
                     </div>
-                    {% if cand.solver %}<p class="candidate-solver"><strong>Solver:</strong> <a href="/user/{{ cand.solver }}">{{ cand.solver }}</a></p>{% endif %}
+                    {% if cand.solver %}<p class="candidate-solver"><strong>Solver:</strong> <a href="/user/{{ cand.solver }}.png">{{ cand.solver }}</a></p>{% endif %}
                     {% if cand.explanation %}<p class="candidate-explanation">{{ cand.explanation }}</p>{% endif %}
                     <div class="candidate-confidence">
                         <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {{ '%.0f' | format(cand.confidence * 100) }}%"></div></div>
@@ -71,7 +71,7 @@
                     <div class="candidate-actions">
                         <button class="btn btn-small btn-approve" hx-post="/api/review/candidates/{{ cand.id }}/approve"
                             hx-swap="none"
-                            hx-on::after-request="if(event.detail.successful) window.location.href='/clue/{{ clue.id }}';">
+                            hx-on::after-request="if(event.detail.successful) window.location.href="/clue/{{ clue.id }}.png";">
                             ✓ Approve
                         </button>
                         <button class="btn btn-small btn-outline btn-reject" hx-post="/api/review/candidates/{{ cand.id }}/reject"
@@ -120,7 +120,7 @@
     {% endif %}
 
     <div class="clue-detail-footer">
-        <a href="/clue/{{ clue.id }}" class="btn btn-small btn-outline">← Back to clue</a>
+        <a href="/clue/{{ clue.id }}.png" class="btn btn-small btn-outline">← Back to clue</a>
         <a href="/search?author=%22{{ clue.author | urlencode }}%22" class="btn btn-small btn-outline">More by {{ clue.author }}</a>
     </div>
 </div>

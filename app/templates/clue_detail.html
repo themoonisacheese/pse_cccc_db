@@ -21,7 +21,7 @@
         <div class="detail-grid">
             <div class="detail-section">
                 <h3>Author</h3>
-                <p><a href="/user/{{ clue.author }}">{{ clue.author }}</a>{% if user and user.display_name == clue.author %}<span class="its-you-pill">you!</span>{% endif %}</p>
+                <p><a href="/user/{{ clue.author }}.png">{{ clue.author }}</a>{% if user and user.display_name == clue.author %}<span class="its-you-pill">you!</span>{% endif %}</p>
                 {% if clue.clues_by_author_so_far %}
                 {% set author_n = clue.clues_by_author_so_far %}
                 <span class="meta-tag {% if author_n == 1 %}pill-bronze{% elif author_n == 50 %}pill-silver{% endif %}">#{{ author_n }} by this author</span>
@@ -29,7 +29,7 @@
             </div>
             <div class="detail-section">
                 <h3>Solver</h3>
-                <p>{% if clue.solver %}<a href="/user/{{ clue.solver }}">{{ clue.solver }}</a>{% else %}—{% endif %}{% if user and clue.solver and user.display_name == clue.solver %}<span class="its-you-pill">you!</span>{% endif %}</p>
+                <p>{% if clue.solver %}<a href="/user/{{ clue.solver }}.png">{{ clue.solver }}</a>{% else %}—{% endif %}{% if user and clue.solver and user.display_name == clue.solver %}<span class="its-you-pill">you!</span>{% endif %}</p>
                 {% if clue.override_solver %}
                 <span class="meta-tag">Override: {{ clue.override_solver }}</span>
                 {% endif %}
@@ -75,7 +75,7 @@
             <h3>Sequences &amp; Themes</h3>
             <div class="sequence-tags">
                 {% for seq in clue.sequences %}
-                <a href="/sequences/{{ seq.id }}" class="sequence-tag {{ 'seq-author' if seq.seq_type == 'author' else ('seq-tag' if seq.seq_type == 'tag' else 'seq-theme') }}"
+                <a href="/sequences/{{ seq.id }}.png" class="sequence-tag {{ 'seq-author' if seq.seq_type == 'author' else ('seq-tag' if seq.seq_type == 'tag' else 'seq-theme') }}"
                    {% if seq.color %}style="--seq-color:{{ seq.color }}"{% endif %}>
                     {{ seq.name or ('Author ' + (seq.author or 'sequence') if seq.seq_type == 'author' else ('Tag' if seq.seq_type == 'tag' else 'Theme')) }}
                 </a>

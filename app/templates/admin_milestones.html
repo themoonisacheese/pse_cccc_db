@@ -37,10 +37,10 @@
             <tbody>
                 {% for c in first_clues %}
                 <tr>
-                    <td><a href="/user/{{ c.author | urlencode }}">{{ c.author }}</a></td>
+                    <td><a href="/user/{{ c.author | urlencode }}.png">{{ c.author }}</a></td>
                     <td>{{ c.clue_date | rel_date }}</td>
                     <td class="clue-num">#{{ c.legacy_number }}</td>
-                    <td><a href="/clue/{{ c.id }}">view</a></td>
+                    <td><a href="/clue/{{ c.id }}.png">view</a></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -65,10 +65,10 @@
             <tbody>
                 {% for c in fiftieth_clues %}
                 <tr>
-                    <td><a href="/user/{{ c.author | urlencode }}">{{ c.author }}</a></td>
+                    <td><a href="/user/{{ c.author | urlencode }}.png">{{ c.author }}</a></td>
                     <td>{{ c.clue_date | rel_date }}</td>
                     <td class="clue-num">#{{ c.legacy_number }}</td>
-                    <td><a href="/clue/{{ c.id }}">view</a></td>
+                    <td><a href="/clue/{{ c.id }}.png">view</a></td>
                 </tr>
                 {% endfor %}
             </tbody>

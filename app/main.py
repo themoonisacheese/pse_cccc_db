@@ -18,9 +18,7 @@ from app.api.clues import router as clues_router
 from app.api.sequences import router as sequences_router
 from app.api.transcript import router as transcript_router
 from app.api.review import router as review_router
-from app.api.embed import router as embed_router
 from app.api.preview_routes import router as preview_router
-from app.api.embed2 import router as embed2_router
 from app.db.session import async_session, engine, Base
 
 settings = get_settings()
@@ -194,9 +192,6 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(transcript_router, prefix="/api")
 app.include_router(review_router, prefix="/api")
-# Embed PoC — not linked anywhere on the site; content-negotiated .png
-app.include_router(embed2_router)
-app.include_router(embed_router)
 app.include_router(preview_router)
 
 
@@ -367,9 +362,8 @@ async def sequences_page(request: Request, q: str = "", filter: str = "all"):
     )
 
 
-@app.get("/sequences/{sequence_id}", response_class=HTMLResponse)
-async def sequence_detail(request: Request, sequence_id: int):
-    """Detailed view of a single sequence and its member clues."""
+async def _serve_sequence_detail_html(request: Request, sequence_id: int):
+    """Render the sequence detail HTML page. Called by the .png route for browsers."""
     from sqlalchemy import select
     from app.models.sequence import Sequence
     from sqlalchemy.orm import selectinload
@@ -391,7 +385,7 @@ async def sequence_detail(request: Request, sequence_id: int):
             )
             lk = legacy.scalar_one_or_none()
             if lk:
-                return RedirectResponse(url=f"/sequences/{lk}", status_code=301)
+                return RedirectResponse(url=f"/sequences/{lk}.png", status_code=301)
 
         if not seq:
             return templates.TemplateResponse(
@@ -408,9 +402,15 @@ async def sequence_detail(request: Request, sequence_id: int):
     )
 
 
-@app.get("/clue/{clue_id}", response_class=HTMLResponse)
-async def clue_detail(request: Request, clue_id: int):
-    """Detailed view of a single clue."""
+@app.get("/sequences/{sequence_id}", response_class=HTMLResponse)
+async def sequence_detail(request: Request, sequence_id: int):
+    """Redirect to the canonical .png URL."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/sequences/{sequence_id}.png", status_code=301)
+
+
+async def _serve_clue_detail_html(request: Request, clue_id: int):
+    """Render the clue detail HTML page. Called by the .png route for browsers."""
     from sqlalchemy import select, func
     from app.models.clue import Clue
 
@@ -452,6 +452,13 @@ async def clue_detail(request: Request, clue_id: int):
     )
 
 
+@app.get("/clue/{clue_id}", response_class=HTMLResponse)
+async def clue_detail(request: Request, clue_id: int):
+    """Redirect to the canonical .png URL."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/clue/{clue_id}.png", status_code=301)
+
+
 @app.get("/clue/legacy/{legacy_number}", response_class=HTMLResponse)
 async def clue_by_legacy(request: Request, legacy_number: int):
     """Redirect to the clue detail page by legacy number."""
@@ -476,7 +483,7 @@ async def clue_by_legacy(request: Request, legacy_number: int):
             status_code=404,
         )
 
-    return RedirectResponse(url=f"/clue/{clue.id}", status_code=301)
+    return RedirectResponse(url=f"/clue/{clue.id}.png", status_code=301)
 
 
 @app.get("/clue/{clue_id}/edit", response_class=HTMLResponse)
@@ -1007,8 +1014,7 @@ def _day_streak(dates: list) -> tuple[int, int]:
     return max_streak, current
 
 
-@app.get("/user/{username}", response_class=HTMLResponse)
-async def user_profile(request: Request, username: str):
+async def _serve_user_profile_html(request: Request, username: str):
     """User profile page: per-person stats, nemeses, streaks, history."""
     from sqlalchemy import select, func, or_
     from sqlalchemy.orm import aliased
@@ -1196,6 +1202,13 @@ async def user_profile(request: Request, username: str):
     )
 
 
+@app.get("/user/{username}", response_class=HTMLResponse)
+async def user_profile(request: Request, username: str):
+    """Redirect to the canonical .png URL."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/user/{username}.png", status_code=301)
+
+
 @app.get("/me", response_class=HTMLResponse)
 async def my_profile(request: Request):
     """Redirect to the logged-in user's profile."""
@@ -1203,7 +1216,7 @@ async def my_profile(request: Request):
     user = getattr(request.state, "user", None)
     if not user:
         return RedirectResponse(url="/api/auth/login?redirect_after=/me", status_code=303)
-    return RedirectResponse(url=f"/user/{user.display_name}", status_code=301)
+    return RedirectResponse(url=f"/user/{user.display_name}.png", status_code=301)
 
 
 # ── Author sequence "chains going on at once" stats ──────────────

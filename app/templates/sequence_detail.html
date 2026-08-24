@@ -11,7 +11,7 @@
         </h1>
         <div class="sequence-meta">
             {{ seq.clues|length }} clue{{ "" if seq.clues|length == 1 else "s" }}
-            {% if seq.author %} · by <a href="/user/{{ seq.author }}">{{ seq.author }}</a>{% endif %}
+            {% if seq.author %} · by <a href="/user/{{ seq.author }}.png">{{ seq.author }}</a>{% endif %}
             {% if seq.legacy_key %} · imported from legacy #{{ seq.legacy_key }}{% endif %}
         </div>
         {% if seq.description %}
@@ -104,10 +104,10 @@
             </thead>
             <tbody>
                 {% for c in clues %}
-                <tr class="clue-row" onclick="window.location='/clue/{{ c.id }}'">
+                <tr class="clue-row" onclick="window.location='/clue/{{ c.id }}.png'">
                     <td class="clue-num">{{ c.legacy_number }}</td>
                     <td class="clue-text">{{ c.clue_text[:120] }}{% if c.clue_text|length > 120 %}…{% endif %}</td>
-                    <td><a href="/user/{{ c.author }}">{{ c.author }}</a></td>
+                    <td><a href="/user/{{ c.author }}.png">{{ c.author }}</a></td>
                     <td class="clue-solution">{{ (c.solution or '(not solved)')[:30] }}</td>
                     {% if user and (user.is_editor or user.is_admin) %}
                     <td class="member-remove-cell">
