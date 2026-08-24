@@ -103,28 +103,56 @@ def render_clue(clue, solution_use_count=0) -> bytes:
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
 
-    # ── Header: "Clue #N" + date ──
+    # ── Header: small "Clue #N" left, date right ──
     title = f"Clue #{clue.legacy_number or clue.id}"
-    draw.text((PAD, PAD), title, fill=FG, font=_font(22, bold=True))
+    draw.text((PAD, PAD), title, fill=FG_DIM, font=_font(13, bold=True))
 
     if clue.clue_date:
         ds = clue.clue_date.strftime("%Y-%m-%d") if isinstance(clue.clue_date, date) else str(clue.clue_date)
-        dw = _tw(draw, ds, _font(12))
-        draw.text((W - PAD - dw, PAD + 4), ds, fill=FG_DIM, font=_font(12))
+        dw = _tw(draw, ds, _font(11))
+        draw.text((W - PAD - dw, PAD + 2), ds, fill=FG_DIM, font=_font(11))
 
-    draw.line([(PAD, PAD + 30), (W - PAD, PAD + 30)], fill=BORDER, width=1)
+    draw.line([(PAD, PAD + 22), (W - PAD, PAD + 22)], fill=BORDER, width=1)
 
-    # ── Clue text (wrapped, up to 4 lines) ──
-    y = PAD + 38
-    cf = _font(14)
-    lines = _wrap(draw, clue.clue_text or "(no clue text)", cf, W - 2 * PAD)[:4]
-    for line in lines:
+    # ── Clue text — the main content, takes ~half the image ──
+    y = PAD + 30
+    cf = _font(18)
+    lines = _wrap(draw, clue.clue_text or "(no clue text)", cf, W - 2 * PAD)
+    max_clue_lines = 5
+    for line in lines[:max_clue_lines]:
         draw.text((PAD, y), line, fill=FG, font=cf)
-        y += 19
+        y += 24
+    if len(lines) > max_clue_lines:
+        draw.text((PAD, y), "\u2026", fill=FG_DIM, font=cf)
+        y += 24
 
-    # ── Meta pills ──
-    y += 4
-    mf = _font(10)
+    # ── Solution — monospaced green, fills space between clue text and footer ──
+    y += 8
+    if clue.solution:
+        sol_font = _font(20, bold=True, mono=True)
+        sol_text = clue.solution
+        if _tw(draw, sol_text, sol_font) <= W - 2 * PAD:
+            sw = _tw(draw, sol_text, sol_font)
+            draw.text(((W - sw) // 2, y), sol_text, fill=GREEN, font=sol_font)
+        else:
+            sol_font = _font(16, bold=True, mono=True)
+            sol_lines = _wrap(draw, sol_text, sol_font, W - 2 * PAD)[:2]
+            for sl in sol_lines:
+                sw = _tw(draw, sl, sol_font)
+                draw.text(((W - sw) // 2, y), sl, fill=GREEN, font=sol_font)
+                y += 22
+        if clue.answer_length:
+            y += 4
+            tag = f"{clue.answer_length} letters"
+            tf = _font(10)
+            tw = _tw(draw, tag, tf)
+            draw.text(((W - tw) // 2, y), tag, fill=FG_DIM, font=tf)
+    else:
+        draw.text((PAD, y), "Not yet solved", fill=FG_DIM, font=_font(14))
+
+    # ── Meta pills (compact, above the footer) ──
+    pill_y = H - PAD - 52
+    mf = _font(9)
     tags = []
     if clue.clue_length:
         tags.append(f"{clue.clue_length} chars")
@@ -136,40 +164,25 @@ def render_clue(clue, solution_use_count=0) -> bytes:
         tags.append(f"solution {solution_use_count}\u00d7")
     tx = PAD
     for tag in tags:
-        pw = _pill(draw, tx, y, tag, mf)
+        pw = _pill(draw, tx, pill_y, tag, mf)
         tx += pw + 6
 
-    # ── Bottom section: 3 columns (author / solver / solution) ──
-    col_y = H - PAD - 70
-    col_w = (W - 2 * PAD - 16) // 3
+    # ── Footer: author and solver, both blue, slightly larger ──
+    fy = H - PAD - 24
+    pf = _font(15, bold=True)
     lf = _font(9)
-    vf = _font(13, bold=True)
-    sf = _font(11)
 
-    # Author
-    _card(draw, PAD, col_y, col_w, 70)
-    draw.text((PAD + 8, col_y + 6), "AUTHOR", fill=FG_DIM, font=lf)
-    draw.text((PAD + 8, col_y + 22), _trunc(clue.author or "\u2014", draw, vf, col_w - 16), fill=ACCENT, font=vf)
+    # Author (left)
+    draw.text((PAD, fy), "AUTHOR", fill=FG_DIM, font=lf)
+    draw.text((PAD, fy + 12), _trunc(clue.author or "\u2014", draw, pf, 240), fill=ACCENT, font=pf)
 
-    # Solver
-    sx = PAD + col_w + 8
-    _card(draw, sx, col_y, col_w, 70)
-    draw.text((sx + 8, col_y + 6), "SOLVER", fill=FG_DIM, font=lf)
-    solver_color = GREEN if clue.solver else FG_DIM
-    draw.text((sx + 8, col_y + 22), _trunc(clue.solver or "\u2014", draw, vf, col_w - 16), fill=solver_color, font=vf)
+    # Solver (right)
+    solver_text = clue.solver or "\u2014"
+    solver_disp = _trunc(solver_text, draw, pf, 240)
+    sw = _tw(draw, solver_disp, pf)
+    draw.text((W - PAD - sw, fy), "SOLVER", fill=FG_DIM, font=lf)
+    draw.text((W - PAD - sw, fy + 12), solver_disp, fill=ACCENT, font=pf)
 
-    # Solution
-    sx2 = sx + col_w + 8
-    _card(draw, sx2, col_y, col_w, 70)
-    draw.text((sx2 + 8, col_y + 6), "SOLUTION", fill=FG_DIM, font=lf)
-    if clue.solution:
-        draw.text((sx2 + 8, col_y + 22), _trunc(clue.solution, draw, vf, col_w - 16), fill=YELLOW, font=vf)
-        if clue.answer_length:
-            draw.text((sx2 + 8, col_y + 44), f"{clue.answer_length} letters", fill=FG_DIM, font=sf)
-    else:
-        draw.text((sx2 + 8, col_y + 22), "Not yet solved", fill=FG_DIM, font=sf)
-
-    _footer(draw)
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
