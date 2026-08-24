@@ -114,60 +114,44 @@ def render_clue(clue, solution_use_count=0) -> bytes:
 
     draw.line([(PAD, PAD + 22), (W - PAD, PAD + 22)], fill=BORDER, width=1)
 
-    # ── Clue text — the main content, takes ~half the image ──
-    y = PAD + 30
+    # ── Clue text — the main content, takes ~50% of the image (150px) ──
+    # Start at y=38, give it until y=190 → 152px of vertical space
+    clue_top = PAD + 30           # 46
+    clue_bottom = 190             # leaves 110px for solution + footer
+    clue_h = clue_bottom - clue_top
+
     cf = _font(18)
+    line_h = 24
+    max_clue_lines = clue_h // line_h  # 6 lines
     lines = _wrap(draw, clue.clue_text or "(no clue text)", cf, W - 2 * PAD)
-    max_clue_lines = 5
+    y = clue_top
     for line in lines[:max_clue_lines]:
         draw.text((PAD, y), line, fill=FG, font=cf)
-        y += 24
+        y += line_h
     if len(lines) > max_clue_lines:
         draw.text((PAD, y), "\u2026", fill=FG_DIM, font=cf)
-        y += 24
 
-    # ── Solution — monospaced green, fills space between clue text and footer ──
-    y += 8
+    # ── Solution — monospaced green, left-justified, compact ──
+    sol_top = clue_bottom + 6      # 196
     if clue.solution:
-        sol_font = _font(20, bold=True, mono=True)
+        sol_font = _font(16, bold=True, mono=True)
         sol_text = clue.solution
         if _tw(draw, sol_text, sol_font) <= W - 2 * PAD:
-            sw = _tw(draw, sol_text, sol_font)
-            draw.text(((W - sw) // 2, y), sol_text, fill=GREEN, font=sol_font)
+            # Left-justified, with "ANSWER" label
+            draw.text((PAD, sol_top), "ANSWER", fill=FG_DIM, font=_font(9))
+            draw.text((PAD, sol_top + 12), sol_text, fill=GREEN, font=sol_font)
         else:
-            sol_font = _font(16, bold=True, mono=True)
+            # Wrap long solutions (left-justified)
             sol_lines = _wrap(draw, sol_text, sol_font, W - 2 * PAD)[:2]
+            draw.text((PAD, sol_top), "ANSWER", fill=FG_DIM, font=_font(9))
+            sy = sol_top + 12
             for sl in sol_lines:
-                sw = _tw(draw, sl, sol_font)
-                draw.text(((W - sw) // 2, y), sl, fill=GREEN, font=sol_font)
-                y += 22
-        if clue.answer_length:
-            y += 4
-            tag = f"{clue.answer_length} letters"
-            tf = _font(10)
-            tw = _tw(draw, tag, tf)
-            draw.text(((W - tw) // 2, y), tag, fill=FG_DIM, font=tf)
+                draw.text((PAD, sy), sl, fill=GREEN, font=sol_font)
+                sy += 20
     else:
-        draw.text((PAD, y), "Not yet solved", fill=FG_DIM, font=_font(14))
+        draw.text((PAD, sol_top + 2), "Not yet solved", fill=FG_DIM, font=_font(13))
 
-    # ── Meta pills (compact, above the footer) ──
-    pill_y = H - PAD - 52
-    mf = _font(9)
-    tags = []
-    if clue.clue_length:
-        tags.append(f"{clue.clue_length} chars")
-    if clue.clues_by_author_so_far:
-        tags.append(f"#{clue.clues_by_author_so_far} by author")
-    if clue.clues_by_solver_so_far:
-        tags.append(f"#{clue.clues_by_solver_so_far} by solver")
-    if solution_use_count and solution_use_count > 1:
-        tags.append(f"solution {solution_use_count}\u00d7")
-    tx = PAD
-    for tag in tags:
-        pw = _pill(draw, tx, pill_y, tag, mf)
-        tx += pw + 6
-
-    # ── Footer: author and solver, both blue, slightly larger ──
+    # ── Footer: author and solver, both blue, at the bottom ──
     fy = H - PAD - 24
     pf = _font(15, bold=True)
     lf = _font(9)
@@ -182,6 +166,25 @@ def render_clue(clue, solution_use_count=0) -> bytes:
     sw = _tw(draw, solver_disp, pf)
     draw.text((W - PAD - sw, fy), "SOLVER", fill=FG_DIM, font=lf)
     draw.text((W - PAD - sw, fy + 12), solver_disp, fill=ACCENT, font=pf)
+
+    # ── Meta pills (compact, right of author or left of solver) ──
+    mf = _font(9)
+    tags = []
+    if clue.clue_length:
+        tags.append(f"{clue.clue_length} chars")
+    if clue.clues_by_author_so_far:
+        tags.append(f"#{clue.clues_by_author_so_far} by author")
+    if clue.clues_by_solver_so_far:
+        tags.append(f"#{clue.clues_by_solver_so_far} by solver")
+    if solution_use_count and solution_use_count > 1:
+        tags.append(f"solution {solution_use_count}\u00d7")
+    # Place pills between author and solver, centered
+    total_pw = sum(_pill(draw, 0, 0, t, mf)[0] + 6 for t in tags) - 6 if tags else 0
+    tx = (W - total_pw) // 2 if tags else 0
+    pill_y = fy + 2
+    for tag in tags:
+        pw = _pill(draw, tx, pill_y, tag, mf)
+        tx += pw + 6
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
