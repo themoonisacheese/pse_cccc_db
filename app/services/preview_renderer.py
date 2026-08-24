@@ -179,8 +179,11 @@ def render_clue(clue, solution_use_count=0) -> bytes:
     if solution_use_count and solution_use_count > 1:
         tags.append(f"solution {solution_use_count}\u00d7")
     # Place pills between author and solver, centered
-    total_pw = sum(_pill(draw, 0, 0, t, mf)[0] + 6 for t in tags) - 6 if tags else 0
-    tx = (W - total_pw) // 2 if tags else 0
+    if tags:
+        total_pw = sum(_tw(draw, t, mf) + 18 for t in tags) - 6  # pw = tw + 12, gap = 6
+        tx = (W - total_pw) // 2
+    else:
+        tx = 0
     pill_y = fy + 2
     for tag in tags:
         pw = _pill(draw, tx, pill_y, tag, mf)
