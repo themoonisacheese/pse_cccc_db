@@ -18,6 +18,9 @@ from app.api.clues import router as clues_router
 from app.api.sequences import router as sequences_router
 from app.api.transcript import router as transcript_router
 from app.api.review import router as review_router
+from app.api.embed import router as embed_router
+from app.api.preview_routes import router as preview_router
+from app.api.embed2 import router as embed2_router
 from app.db.session import async_session, engine, Base
 
 settings = get_settings()
@@ -191,6 +194,10 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(transcript_router, prefix="/api")
 app.include_router(review_router, prefix="/api")
+# Embed PoC — not linked anywhere on the site; content-negotiated .png
+app.include_router(embed2_router)
+app.include_router(embed_router)
+app.include_router(preview_router)
 
 
 # ── Web UI routes (HTMX + Jinja2) ───────────────────────────
