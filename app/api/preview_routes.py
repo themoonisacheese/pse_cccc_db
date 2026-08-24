@@ -10,6 +10,13 @@ Detection uses sec-fetch-dest (proven reliable from live SE chat logs):
   - sec-fetch-dest: document  → browser      → serve HTML page
   - fallback: Accept header    → text/html = browser, image/* = fetcher
 
+Caching:
+  PNG responses are public, cached for 5 minutes (max-age=300).
+  HTML responses are no-store (dynamic content, edits/reviews change them).
+  Both carry `Vary: sec-fetch-dest, Accept` so caches know the
+  content-type depends on request headers and never serve one variant
+  to a request that expects the other.
+
 Routes:
   /clue/{legacy_number}.png        — clue detail (canonical URL)
   /user/{username}.png       — user profile (canonical URL)
@@ -34,6 +41,14 @@ from app.services.preview_renderer import (
 
 router = APIRouter()
 
+# Vary header: tells caches the response depends on sec-fetch-dest and Accept.
+# Without this, a cache could serve a cached PNG to a browser (or vice versa).
+_VARY = "sec-fetch-dest, Accept"
+
+# PNG responses: cacheable for 5 minutes.  HTML responses: never cache.
+_PNG_CACHE = {"Cache-Control": "public, max-age=300", "Vary": _VARY}
+_HTML_CACHE = {"Cache-Control": "no-store", "Vary": _VARY}
+
 
 def _is_fetcher(request: Request) -> bool:
     """Return True if this request should get a PNG (image fetcher, not browser)."""
@@ -54,6 +69,13 @@ def _is_fetcher(request: Request) -> bool:
         return True
 
     return True  # default: treat as fetcher (safe for embeds)
+
+
+def _tag_html(response):
+    """Add Vary + no-store headers to an HTML response returned by a helper."""
+    response.headers["Vary"] = _VARY
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 # ── Clue detail .png ─────────────────────────────────────────
@@ -81,26 +103,25 @@ async def clue_png(request: Request, legacy_number: int):
     if not _is_fetcher(request):
         # Browser → serve the real HTML page (delegates to main.py's route)
         from app.main import _serve_clue_detail_html
-        return await _serve_clue_detail_html(request, legacy_number=legacy_number)
+        return _tag_html(await _serve_clue_detail_html(request, legacy_number=legacy_number))
 
     clue, solution_use_count = await _get_clue_data(legacy_number=legacy_number)
     if not clue:
-        return Response(content=b"", status_code=404, media_type="image/png")
+        return Response(content=b"", status_code=404, media_type="image/png",
+                        headers={"Vary": _VARY})
 
     return Response(
         content=render_clue(clue, solution_use_count),
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=300"},
+        headers=_PNG_CACHE,
     )
 
 
 @router.head("/clue/{legacy_number}.png")
 async def clue_png_head(request: Request, legacy_number: int):
     if not _is_fetcher(request):
-        return Response(content=b"", media_type="text/html",
-                        headers={"Cache-Control": "no-store"})
-    return Response(content=b"", media_type="image/png",
-                    headers={"Cache-Control": "public, max-age=300"})
+        return Response(content=b"", media_type="text/html", headers=_HTML_CACHE)
+    return Response(content=b"", media_type="image/png", headers=_PNG_CACHE)
 
 
 # ── User profile .png ────────────────────────────────────────
@@ -173,11 +194,12 @@ async def _get_user_data(username: str):
 async def user_png(request: Request, username: str):
     if not _is_fetcher(request):
         from app.main import _serve_user_profile_html
-        return await _serve_user_profile_html(request, username)
+        return _tag_html(await _serve_user_profile_html(request, username))
 
     data = await _get_user_data(username)
     if not data:
-        return Response(content=b"", status_code=404, media_type="image/png")
+        return Response(content=b"", status_code=404, media_type="image/png",
+                        headers={"Vary": _VARY})
 
     return Response(
         content=render_user_profile(
@@ -186,17 +208,15 @@ async def user_png(request: Request, username: str):
             data["first_date"], data["last_date"],
         ),
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=300"},
+        headers=_PNG_CACHE,
     )
 
 
 @router.head("/user/{username}.png")
 async def user_png_head(request: Request, username: str):
     if not _is_fetcher(request):
-        return Response(content=b"", media_type="text/html",
-                        headers={"Cache-Control": "no-store"})
-    return Response(content=b"", media_type="image/png",
-                    headers={"Cache-Control": "public, max-age=300"})
+        return Response(content=b"", media_type="text/html", headers=_HTML_CACHE)
+    return Response(content=b"", media_type="image/png", headers=_PNG_CACHE)
 
 
 # ── Sequence detail .png ─────────────────────────────────────
@@ -219,23 +239,22 @@ async def _get_sequence_data(sequence_id: int):
 async def sequence_png(request: Request, sequence_id: int):
     if not _is_fetcher(request):
         from app.main import _serve_sequence_detail_html
-        return await _serve_sequence_detail_html(request, sequence_id)
+        return _tag_html(await _serve_sequence_detail_html(request, sequence_id))
 
     seq, clues = await _get_sequence_data(sequence_id)
     if not seq:
-        return Response(content=b"", status_code=404, media_type="image/png")
+        return Response(content=b"", status_code=404, media_type="image/png",
+                        headers={"Vary": _VARY})
 
     return Response(
         content=render_sequence(seq, clues),
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=300"},
+        headers=_PNG_CACHE,
     )
 
 
 @router.head("/sequences/{sequence_id}.png")
 async def sequence_png_head(request: Request, sequence_id: int):
     if not _is_fetcher(request):
-        return Response(content=b"", media_type="text/html",
-                        headers={"Cache-Control": "no-store"})
-    return Response(content=b"", media_type="image/png",
-                    headers={"Cache-Control": "public, max-age=300"})
+        return Response(content=b"", media_type="text/html", headers=_HTML_CACHE)
+    return Response(content=b"", media_type="image/png", headers=_PNG_CACHE)
