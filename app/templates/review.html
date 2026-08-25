@@ -71,7 +71,7 @@
                     <div class="candidate-actions">
                         <button class="btn btn-small btn-approve" hx-post="/api/review/candidates/{{ cand.id }}/approve"
                             hx-swap="none"
-                            hx-on::after-request="if(event.detail.successful) window.location.href="/clue/{{ clue.legacy_number }}.png";">
+                            hx-on::after-request="if(event.detail.successful) window.location.href='/clue/{{ clue.legacy_number }}.png';">
                             ✓ Approve
                         </button>
                         <button class="btn btn-small btn-outline btn-reject" hx-post="/api/review/candidates/{{ cand.id }}/reject"
