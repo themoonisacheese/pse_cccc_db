@@ -198,48 +198,31 @@ async def create_clue(
     clue_in: ClueCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new clue. Requires room-owner privileges."""
+    """Create a new clue. Requires editor privileges.
+
+    If legacy_number is provided and already exists, existing clues are
+    shifted up to make room (mid-chain insertion for missed clues).
+    """
     user = _check_write_perm(request)
-    clue = Clue(**clue_in.model_dump())
 
-    # Normalize solution to uppercase on ingest (crosswords convention).
-    if clue.solution:
-        clue.solution = clue.solution.strip().upper()
-
-    clue.entered_by_user_id = user.id
-
-    # Auto-assign legacy_number if not provided
-    if clue.legacy_number is None:
-        max_num = (
-            await db.execute(select(func.max(Clue.legacy_number)))
-        ).scalar()
-        clue.legacy_number = (max_num or 0) + 1
-
-    # Auto-compute "Nth clue by this author" and "Nth clue by this solver" pills.
-    # These change almost never (only if a clue is renumbered or author/solver
-    # is corrected), so we store them at write time rather than computing on read.
-    clue.clues_by_author_so_far = (
-        await db.execute(
-            select(func.count(Clue.id)).where(
-                Clue.author == clue.author,
-                Clue.legacy_number < clue.legacy_number,
-            )
-        )
-    ).scalar() + 1
-
-    if clue.solver:
-        clue.clues_by_solver_so_far = (
-            await db.execute(
-                select(func.count(Clue.id)).where(
-                    Clue.solver == clue.solver,
-                    Clue.legacy_number < clue.legacy_number,
-                )
-            )
-        ).scalar() + 1
-
-    db.add(clue)
-    await db.commit()
-    await db.refresh(clue)
+    clue = await service_ingest_clue(
+        db,
+        actor=user,
+        clue_text=clue_in.clue_text,
+        author=clue_in.author,
+        solver=clue_in.solver,
+        solution=clue_in.solution,
+        explanation=clue_in.explanation,
+        transcript_link=clue_in.transcript_link,
+        legacy_number=clue_in.legacy_number,
+        source=clue_in.source,
+        clue_date=clue_in.clue_date,
+        number_on_date=clue_in.number_on_date,
+        one_word_answer_length=clue_in.one_word_answer_length,
+        clues_by_author_so_far=clue_in.clues_by_author_so_far,
+        clues_by_solver_so_far=clue_in.clues_by_solver_so_far,
+        message_id=clue_in.message_id,
+    )
     return ClueOut.model_validate(clue)
 
 

@@ -101,3 +101,24 @@ def test_strip_header_bold():
 def test_extract_enumeration():
     assert extract_enumeration("a clue here (4, 8)") == "(4, 8)"
     assert extract_enumeration("no enum here") is None
+
+
+def test_accept_hyphenated_enumeration():
+    """Enumerations with hyphens (multi-word answers like '4-2') must be accepted."""
+    d = decide("CCCC A two-word answer (4-2)")
+    assert d.result is AcceptResult.ACCEPT
+    assert d.has_enumeration
+    assert d.enumeration == "(4-2)"
+
+
+def test_accept_hyphenated_enumeration_spaces():
+    d = decide("CCCC Spaced hyphen (4 - 2)")
+    assert d.result is AcceptResult.ACCEPT
+    assert d.enumeration == "(4 - 2)"
+
+
+def test_accept_mixed_enumeration():
+    """Mixed comma/hyphen enumerations like (4,2-3) should be accepted."""
+    d = decide("CCCC Mixed separators (4,2-3)")
+    assert d.result is AcceptResult.ACCEPT
+    assert d.enumeration == "(4,2-3)"

@@ -98,8 +98,14 @@ document.getElementById('clue-form').addEventListener('submit', async (e) => {
         const clue = await resp.json();
         window.location.href = '/clue/' + clue.legacy_number + '.png';
     } else {
-        const err = await resp.json();
-        alert('Error: ' + JSON.stringify(err));
+        let msg = 'HTTP ' + resp.status;
+        try {
+            const err = await resp.json();
+            msg += ': ' + JSON.stringify(err);
+        } catch (_) {
+            msg += ' (non-JSON response)';
+        }
+        alert('Error: ' + msg);
     }
 });
 </script>

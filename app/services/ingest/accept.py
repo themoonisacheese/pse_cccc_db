@@ -27,10 +27,14 @@ from bs4 import BeautifulSoup
 # handled (that variant puts the closing bold after the colon).
 RE_HEADER = re.compile(r"^\s*\*{0,2}CCCC\*{0,2}\s*:?\s*\*{0,2}\s*", re.IGNORECASE)
 
-# A trailing enumeration in parentheses, e.g. (10), (4, 8), (3, 4, 5).
+# A trailing enumeration in parentheses, e.g. (10), (4, 8), (3, 4, 5),
+# (4-2), (4 - 2), (4,2-3).  Word lengths may be separated by commas or
+# hyphens (the latter is common for multi-word answers like "4-2").
 # Allows optional whitespace inside and around the parens, and tolerates a
 # trailing period or other punctuation after the closing paren.
-RE_ENUMERATION = re.compile(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$")
+RE_ENUMERATION = re.compile(
+    r"\(\s*\d+(?:\s*[-,]\s*\d+)*\s*\)\s*\.?\s*$"
+)
 
 
 class AcceptResult(Enum):
