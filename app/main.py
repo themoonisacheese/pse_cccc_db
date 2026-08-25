@@ -441,6 +441,25 @@ async def _serve_clue_detail_html(request: Request, legacy_number: int):
                 )
             ).scalar() or 0
 
+        # Prev/next navigation by legacy_number
+        prev_clue = (
+            await db.execute(
+                select(Clue.legacy_number)
+                .where(Clue.legacy_number < legacy_number)
+                .order_by(Clue.legacy_number.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        next_clue = (
+            await db.execute(
+                select(Clue.legacy_number)
+                .where(Clue.legacy_number > legacy_number)
+                .order_by(Clue.legacy_number)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
     return templates.TemplateResponse(
         "clue_detail.html",
         {
@@ -448,6 +467,8 @@ async def _serve_clue_detail_html(request: Request, legacy_number: int):
             "clue": clue,
             "user": user,
             "solution_use_count": solution_use_count,
+            "prev_clue": prev_clue,
+            "next_clue": next_clue,
         },
     )
 
