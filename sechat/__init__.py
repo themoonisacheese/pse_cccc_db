@@ -138,7 +138,18 @@ class Room:
         self.logger.warning("Connection closed, attempting to reconnect")
         self.socket.close()
         time.sleep(2)
-        self.connect()
+        # Vendored fix: a failed reconnect must NOT kill the listener thread.
+        # Previously `self.connect()` was called bare here; when it raised
+        # errors.ConnectionError (e.g. ws-auth handshake timeout) the exception
+        # escaped the while loop and silently killed this daemon thread, leaving
+        # the room permanently deaf while the process stayed "Up". Catch it and
+        # retry instead. After (re)connecting we `continue` so we don't fall
+        # through and process a stale/unbound `data`.
+        try:
+          self.connect()
+        except errors.ConnectionError as e:
+          self.logger.error("Reconnect failed (%s), will retry", e)
+        continue
       except Exception as e:
         self.logger.info("Shutting down...")
         self.socket.close()
@@ -169,7 +180,12 @@ class Room:
       if time.time() - self.lastPing > 60:
         self.logger.warning("Connection likely dropped, reconnecting...")
         self.socket.close()
-        self.connect()
+        # Vendored fix: same as above — a failed reconnect must not kill the
+        # listener thread, so retry instead of letting ConnectionError escape.
+        try:
+          self.connect()
+        except errors.ConnectionError as e:
+          self.logger.error("Reconnect failed (%s), will retry", e)
     self.logger.info("Shutting down...")
     self.session.post(
       "https://chat.stackexchange.com/chats/leave/"

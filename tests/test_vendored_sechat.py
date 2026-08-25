@@ -15,6 +15,8 @@ import json
 import threading
 import time
 
+import websocket
+
 import sechat
 
 
@@ -116,3 +118,59 @@ def test_malformed_json_frame_does_not_kill_listener():
     room = _run_room(["this is not json", good])
 
     assert len(room.processed) == 1
+
+
+class _FakeSocketClosed(_FakeSocket):
+    """A socket whose recv() always raises WebSocketConnectionClosedException
+    (the old socket stays closed after a drop). The loop keeps hitting it and
+    retrying connect() until connect() swaps in a fresh socket."""
+
+    def __init__(self):
+        super().__init__([])
+
+    def recv(self):
+        raise websocket.WebSocketConnectionClosedException("closed")
+
+
+class _FakeRoomReconnect(_FakeRoom):
+    """A Room whose connect() fails once (ConnectionError), then succeeds.
+
+    This simulates the real-world failure: the ws-auth handshake times out
+    during a reconnect. Before the fix, that ConnectionError escaped the
+    receive loop and killed the listener thread.
+    """
+
+    def __init__(self):
+        super().__init__([])
+        self.socket = _FakeSocketClosed()
+        self._connect_calls = 0
+
+    def connect(self):
+        self._connect_calls += 1
+        if self._connect_calls == 1:
+            # First reconnect attempt fails (e.g. handshake timeout).
+            raise sechat.errors.ConnectionError("Failed to connect to socket")
+        # Second attempt succeeds: give the loop a live socket again.
+        self.socket = _FakeSocket([])
+
+
+def test_failed_reconnect_does_not_kill_listener():
+    """A ConnectionError during reconnect must be caught and retried, not
+    allowed to escape and kill the listener thread."""
+    room = _FakeRoomReconnect()
+    t = threading.Thread(target=room.run, daemon=True)
+    t.start()
+    # The reconnect path sleeps 2s before calling connect(), so poll until the
+    # loop has failed once and retried (connect called >= 2 times).
+    deadline = time.time() + 6.0
+    while time.time() < deadline and room._connect_calls < 2:
+        time.sleep(0.05)
+    assert room._connect_calls >= 2, "reconnect should have been retried"
+    # The thread is still alive (listener survived the failed reconnect).
+    assert t.is_alive(), "listener thread must survive a failed reconnect"
+    # Stop cleanly.
+    room.socket.close()
+    room.running = False
+    t.join(timeout=1.0)
+    assert not t.is_alive()
+
