@@ -6,7 +6,7 @@ import logging
 from datetime import date
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.clue import Clue, ClueEditHistory, User
@@ -103,12 +103,22 @@ async def ingest_clue(
 
     # ── Legacy-number assignment ─────────────────────────────
     if legacy_number is not None:
+        # Temporarily drop the partial unique index so the bulk shift
+        # (legacy_number + 1) doesn't trip a duplicate-key violation
+        # on intermediate row states.  Recreated after the shift, all
+        # within the same transaction.
+        await db.execute(text("DROP INDEX IF EXISTS uq_clues_legacy_number"))
         # Shift existing clues up to make room (will be cheap at ~10k rows).
         await db.execute(
             Clue.__table__.update()
             .where(Clue.legacy_number >= legacy_number)
             .values(legacy_number=Clue.legacy_number + 1)
         )
+        # Recreate the partial unique index.
+        await db.execute(text(
+            "CREATE UNIQUE INDEX uq_clues_legacy_number "
+            "ON clues (legacy_number) WHERE legacy_number IS NOT NULL"
+        ))
         clue.legacy_number = legacy_number
         # The shift changed legacy_numbers, so every clue that moved needs its
         # author/solver pill recomputed (it may have gained entries).
