@@ -233,58 +233,22 @@ async def update_clue(
     clue_in: ClueUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Update an existing clue. Requires room-owner privileges."""
+    """Update an existing clue. Requires editor privileges.
+
+    If legacy_number is changed to a value already taken by another clue,
+    existing clues are shifted to make room.
+    """
     user = _check_write_perm(request)
-    result = await db.execute(select(Clue).where(Clue.id == clue_id))
-    clue = result.scalar_one_or_none()
-    if not clue:
-        raise HTTPException(status_code=404, detail="Clue not found")
-
     update_data = clue_in.model_dump(exclude_unset=True)
-
-    # Normalize solution to uppercase on ingest (crosswords convention).
-    if "solution" in update_data and update_data["solution"]:
-        update_data["solution"] = update_data["solution"].strip().upper()
-
-    for field, new_value in update_data.items():
-        old_value = getattr(clue, field, None)
-        if old_value != new_value:
-            # Record edit history
-            history = ClueEditHistory(
-                clue_id=clue.id,
-                edited_by_user_id=user.id,
-                field_name=field,
-                old_value=str(old_value) if old_value is not None else None,
-                new_value=str(new_value) if new_value is not None else None,
-            )
-            db.add(history)
-            setattr(clue, field, new_value)
-
-    # Recompute author/solver pills if relevant fields changed
-    if any(f in update_data for f in ("author", "solver", "legacy_number")):
-        clue.clues_by_author_so_far = (
-            await db.execute(
-                select(func.count(Clue.id)).where(
-                    Clue.author == clue.author,
-                    Clue.legacy_number <= clue.legacy_number,
-                )
-            )
-        ).scalar()
-
-        if clue.solver:
-            clue.clues_by_solver_so_far = (
-                await db.execute(
-                    select(func.count(Clue.id)).where(
-                        Clue.solver == clue.solver,
-                        Clue.legacy_number <= clue.legacy_number,
-                    )
-                )
-            ).scalar()
-        else:
-            clue.clues_by_solver_so_far = None
-
-    await db.commit()
-    await db.refresh(clue)
+    try:
+        clue = await service_update_clue(
+            db,
+            actor=user,
+            clue_id=clue_id,
+            update_data=update_data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     return ClueOut.model_validate(clue)
 
 

@@ -165,7 +165,13 @@ async def update_clue(
     update_data: dict,
 ) -> Clue:
     """Update an existing clue, recording edit history.
-    Shared by the HTTP PUT path and any future reconciliation logic."""
+    Shared by the HTTP PUT path and any future reconciliation logic.
+
+    If ``legacy_number`` is being changed to a value already taken by another
+    clue, the existing clue(s) are shifted (the same drop-index / shift /
+    recreate-index dance used by :func:`ingest_clue`) so the partial unique
+    index doesn't trip on intermediate row states.
+    """
     result = await db.execute(select(Clue).where(Clue.id == clue_id))
     clue = result.scalar_one_or_none()
     if not clue:
@@ -174,6 +180,56 @@ async def update_clue(
     # Normalise solution to uppercase.
     if "solution" in update_data and update_data["solution"]:
         update_data["solution"] = update_data["solution"].strip().upper()
+
+    # ── Legacy-number shifting ──────────────────────────────
+    new_legacy = update_data.get("legacy_number")
+    old_legacy = clue.legacy_number
+    if new_legacy is not None and new_legacy != old_legacy:
+        # NULL out this clue's legacy_number first so it doesn't collide
+        # with the shifted rows or the recreated unique index.
+        await db.execute(
+            Clue.__table__.update()
+            .where(Clue.id == clue_id)
+            .values(legacy_number=None)
+        )
+        # Temporarily drop the partial unique index so the bulk shift
+        # doesn't trip a duplicate-key violation on intermediate states.
+        await db.execute(text("DROP INDEX IF EXISTS uq_clues_legacy_number"))
+        if new_legacy < old_legacy:
+            # Moving earlier: shift clues in [new_legacy, old_legacy) up by 1.
+            await db.execute(
+                Clue.__table__.update()
+                .where(Clue.legacy_number >= new_legacy)
+                .where(Clue.legacy_number < old_legacy)
+                .values(legacy_number=Clue.legacy_number + 1)
+            )
+            recompute_from = new_legacy
+        else:
+            # Moving later: shift clues in (old_legacy, new_legacy] down by 1.
+            await db.execute(
+                Clue.__table__.update()
+                .where(Clue.legacy_number > old_legacy)
+                .where(Clue.legacy_number <= new_legacy)
+                .values(legacy_number=Clue.legacy_number - 1)
+            )
+            recompute_from = old_legacy
+        # Set the clue's new legacy_number before recreating the index.
+        await db.execute(
+            Clue.__table__.update()
+            .where(Clue.id == clue_id)
+            .values(legacy_number=new_legacy)
+        )
+        clue.legacy_number = new_legacy
+        # Recreate the partial unique index.
+        await db.execute(text(
+            "CREATE UNIQUE INDEX uq_clues_legacy_number "
+            "ON clues (legacy_number) WHERE legacy_number IS NOT NULL"
+        ))
+        # The shift changed legacy_numbers, so every clue that moved needs its
+        # author/solver pill recomputed.
+        await _recompute_pills(db, recompute_from)
+        # Don't double-apply legacy_number in the field loop below.
+        update_data.pop("legacy_number", None)
 
     for field, new_value in update_data.items():
         old_value = getattr(clue, field, None)

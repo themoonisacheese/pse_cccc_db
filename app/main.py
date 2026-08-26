@@ -985,7 +985,7 @@ async def stats_page(request: Request, period: str = "all"):
             "seq_chart_labels": seq_chart_labels,
             "seq_chart_data": seq_chart_data,
             "seq_stats": seq_stats,
-            "has_author_sequences": bool(seq_stats and (seq_stats["total"] or seq_stats["crowded"])),
+            "has_author_sequences": bool(seq_stats and (seq_stats["total"] or seq_stats["crowded_moments"])),
         },
     )
 

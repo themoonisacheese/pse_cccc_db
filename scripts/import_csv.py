@@ -200,13 +200,20 @@ async def import_clues(clue_dicts: list[dict]):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # Apply FTS migration (split by $$ dollar-quoting for asyncpg)
-        migration_path = Path(__file__).parent / "migration_001_fts.sql"
-        if migration_path.exists():
-            migration_sql = migration_path.read_text()
-            for stmt in _split_sql(migration_sql):
-                await conn.execute(text(stmt))
-            print("Applied FTS migration")
+        # Apply all migrations in order (split by $$ dollar-quoting for asyncpg)
+        migration_dir = Path(__file__).parent
+        migration_files = sorted(
+            f for f in migration_dir.glob("migration_*.sql")
+            if f.name != "migration_001_fts.sql"  # already applied above if needed
+        )
+        # Apply 001 first, then the rest
+        all_migrations = [migration_dir / "migration_001_fts.sql"] + migration_files
+        for migration_path in all_migrations:
+            if migration_path.exists():
+                migration_sql = migration_path.read_text()
+                for stmt in _split_sql(migration_sql):
+                    await conn.execute(text(stmt))
+                print(f"Applied migration: {migration_path.name}")
 
         # Add unique constraint on legacy_number if it doesn't exist
         await conn.execute(text(
@@ -235,6 +242,7 @@ async def import_clues(clue_dicts: list[dict]):
             }
             stmt = stmt.on_conflict_do_update(
                 index_elements=["legacy_number"],
+                index_where=text("legacy_number IS NOT NULL"),
                 set_=update_cols,
             )
             await session.execute(stmt)

@@ -2,6 +2,7 @@
 
 from datetime import datetime, date
 from sqlalchemy import (
+    Computed,
     Integer,
     String,
     Text,
@@ -32,7 +33,7 @@ class User(Base):
     is_room_owner: Mapped[bool] = mapped_column(Boolean, default=False)
     is_editor: Mapped[bool] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_bot: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_bot: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -57,7 +58,7 @@ class Clue(Base):
     clue_text: Mapped[str] = mapped_column(Text)
     # clue_length is a generated column: LENGTH(clue_text) — not settable
     clue_length: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, server_default=text("LENGTH(clue_text)")
+        Integer, Computed("LENGTH(clue_text)")
     )
 
     author: Mapped[str] = mapped_column(String(255), index=True)
@@ -67,8 +68,7 @@ class Clue(Base):
     solution: Mapped[str | None] = mapped_column(Text, index=True, nullable=True)
     # answer_length is a generated column: letter count of solution (ignoring spaces/hyphens)
     answer_length: Mapped[int | None] = mapped_column(
-        Integer, nullable=True,
-        server_default=text("LENGTH(REPLACE(REPLACE(solution, ' ', ''), '-', ''))")
+        Integer, Computed("LENGTH(REPLACE(REPLACE(solution, ' ', ''), '-', ''))")
     )
     one_word_answer_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)

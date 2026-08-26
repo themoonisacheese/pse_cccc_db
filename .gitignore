@@ -15,3 +15,6 @@ secrets.json
 credentials*.json
 *.pem
 *.key
+
+# Large data dump
+/data.csv

@@ -2,33 +2,40 @@
 {% block title %}Clue #{{ clue.legacy_number }} — CCCC DB{% endblock %}
 {% block head %}
 <style>
-.clue-nav-prev-next {
+.clue-nav-row {
     display: flex;
-    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
     margin-bottom: 0.5rem;
 }
-.clue-nav-prev-next .btn[disabled] {
+.clue-nav-row .clue-nav-btn[disabled] {
     opacity: 0.35;
     pointer-events: none;
+}
+.clue-nav-row h1 {
+    margin: 0;
+    text-align: center;
+    flex: 1;
 }
 </style>
 {% endblock %}
 {% block content %}
 <div class="clue-detail">
     <div class="clue-detail-header">
-        <div class="clue-nav-prev-next">
+        <div class="clue-nav-row">
             {% if prev_clue is not none %}
-            <a href="/clue/{{ prev_clue }}.png" class="btn btn-small btn-outline" title="Clue #{{ prev_clue }}">&larr; #{{ prev_clue }}</a>
+            <a href="/clue/{{ prev_clue }}.png" class="btn btn-small btn-outline clue-nav-btn" title="Clue #{{ prev_clue }}">&larr; #{{ prev_clue }}</a>
             {% else %}
-            <span class="btn btn-small btn-outline" disabled>&larr;</span>
+            <span class="btn btn-small btn-outline clue-nav-btn" disabled>&larr;</span>
             {% endif %}
+            <h1>Clue #{{ clue.legacy_number }}</h1>
             {% if next_clue is not none %}
-            <a href="/clue/{{ next_clue }}.png" class="btn btn-small btn-outline" title="Clue #{{ next_clue }}">#{{ next_clue }} &rarr;</a>
+            <a href="/clue/{{ next_clue }}.png" class="btn btn-small btn-outline clue-nav-btn" title="Clue #{{ next_clue }}">#{{ next_clue }} &rarr;</a>
             {% else %}
-            <span class="btn btn-small btn-outline" disabled>&rarr;</span>
+            <span class="btn btn-small btn-outline clue-nav-btn" disabled>&rarr;</span>
             {% endif %}
         </div>
-        <h1>Clue #{{ clue.legacy_number }}</h1>
         {% if clue.clue_date %}
         <span class="clue-date" title="{{ clue.clue_date }}">{{ clue.clue_date | rel_date }}</span>
         {% endif %}
