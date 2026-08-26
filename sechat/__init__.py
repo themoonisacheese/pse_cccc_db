@@ -79,7 +79,7 @@ class Room:
       )
       r = r.json()
     except Exception as e:
-      raise errors.ConnectionError("Unable to authenticate: " + str(r.content)) from e
+      raise errors.ConnectionError("Unable to authenticate: " + str(e)) from e
     target = r["url"]+"?l={}".format(int(time.time()))
     try:
       self.socket = websocket.create_connection(target, origin="http://chat.stackexchange.com", timeout = 2)
