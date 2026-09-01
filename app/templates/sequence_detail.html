@@ -64,10 +64,28 @@
         </form>
     </div>
     <script>
+    // Server-known current values. Used so a partial edit (e.g. only the title)
+    // does NOT silently overwrite fields the user didn't touch — the API's
+    // PUT honours exclude_unset, so we only send the fields that changed.
+    const SEQ_CURRENT = {
+        name: {{ (seq.name or '')|tojson }},
+        seq_type: {{ seq.seq_type|tojson }},
+        author: {{ (seq.author or '')|tojson }},
+        color: {{ (seq.color or '')|tojson }},
+        description: {{ (seq.description or '')|tojson }},
+    };
     document.getElementById('edit-sequence').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.target).entries());
-        for (const k of Object.keys(data)) if (data[k] === '') data[k] = null;
+        const form = Object.fromEntries(new FormData(e.target).entries());
+        const data = {};
+        for (const k of Object.keys(form)) {
+            let v = form[k];
+            if (v === '') v = null;                 // blank field -> clear it
+            const cur = SEQ_CURRENT[k] ?? null;
+            if (v === cur) continue;                // unchanged -> leave server value alone
+            data[k] = v;
+        }
+        if (Object.keys(data).length === 0) { window.location.reload(); return; }
         const resp = await fetch('/api/sequences/{{ seq.id }}', {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},

@@ -13,6 +13,21 @@ from app.models.clue import Clue, ClueEditHistory, User
 
 logger = logging.getLogger(__name__)
 
+# Fixed advisory-lock key guarding the legacy_number space.  Any process that
+# renumbers clues (mid-chain insert, or moving a clue to a different position)
+# takes this lock for the duration of its transaction, so two renumbering
+# operations can never overlap.  This prevents the DROP/CREATE INDEX + bulk
+# shift (which take an AccessExclusiveLock on `clues`) from colliding with a
+# concurrent writer, which previously surfaced as DeadlockDetected 500s.
+# It is transaction-scoped (pg_advisory_xact_lock), so it auto-releases on
+# commit/rollback, and ordinary readers never take it — they are unaffected.
+_LEGACY_NUMBER_LOCK = text("SELECT pg_advisory_xact_lock(996744001)")
+
+
+async def _acquire_renumber_lock(db: AsyncSession) -> None:
+    """Serialise legacy-number renumbering against other renumbering ops."""
+    await db.execute(_LEGACY_NUMBER_LOCK)
+
 
 async def _recompute_pills(db: AsyncSession, from_legacy: int) -> None:
     """Recompute the author/solver pills for every clue at or after a position.
@@ -103,6 +118,9 @@ async def ingest_clue(
 
     # ── Legacy-number assignment ─────────────────────────────
     if legacy_number is not None:
+        # Serialise against any concurrent renumbering (mid-chain edit) so the
+        # DROP INDEX / shift / CREATE INDEX dance can never deadlock with it.
+        await _acquire_renumber_lock(db)
         # Temporarily drop the partial unique index so the bulk shift
         # (legacy_number + 1) doesn't trip a duplicate-key violation
         # on intermediate row states.  Recreated after the shift, all
@@ -185,6 +203,10 @@ async def update_clue(
     new_legacy = update_data.get("legacy_number")
     old_legacy = clue.legacy_number
     if new_legacy is not None and new_legacy != old_legacy:
+        # Serialise against any concurrent renumbering (mid-chain insert/edit)
+        # so the DROP INDEX / shift / CREATE INDEX dance can never deadlock
+        # with it.
+        await _acquire_renumber_lock(db)
         # NULL out this clue's legacy_number first so it doesn't collide
         # with the shifted rows or the recreated unique index.
         await db.execute(
