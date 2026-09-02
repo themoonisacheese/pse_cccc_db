@@ -353,8 +353,11 @@ textarea.form-input { resize: vertical; font-family: var(--sans); }
 .sequence-meta { color: var(--fg-dim); }
 .sequence-actions { margin-top: 0.5rem; }
 
-.member-add { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+.member-add { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
 .member-add .form-input { width: 200px; }
+.member-auto-add { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: 0.75rem; }
+.member-add .member-auto-count-input { width: 70px; }
+.member-auto-label { color: var(--fg-dim); white-space: nowrap; }
 .member-remove-cell { text-align: right; }
 
 /* Sequence tags on the clue detail page */

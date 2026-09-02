@@ -65,6 +65,12 @@ class SequenceMembershipUpdate(BaseModel):
     clue_ids: list[int] = Field(default_factory=list)
 
 
+class SequenceAutoAddByAuthor(BaseModel):
+    """Request body for auto-adding an author's most recent clues to an author sequence."""
+
+    count: int = Field(..., ge=1, le=500)
+
+
 # ── Clue-embedded sequence summary ──────────────────────────
 
 

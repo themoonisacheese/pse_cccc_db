@@ -114,6 +114,15 @@
         <div class="member-add">
             <input type="number" id="member-add-num" class="form-input" placeholder="Clue legacy # to add (e.g. 1234)" min="1">
             <button class="btn btn-small" id="member-add-btn">Add clue</button>
+            {% if seq.seq_type == 'author' %}
+            <span class="member-auto-add">
+                <label for="member-auto-count" class="member-auto-label">auto-add last</label>
+                <input type="number" id="member-auto-count" class="form-input member-auto-count-input" min="1" max="500"
+                       value="0" title="Enter how many of the author's most recent clues to add (1–500)">
+                <button class="btn btn-small btn-outline" id="member-auto-btn"
+                        title="Add the author's most recent clues by legacy number">Add by author</button>
+            </span>
+            {% endif %}
         </div>
         {% endif %}
         <table class="clue-table">
@@ -143,8 +152,7 @@
 
 {% if user and (user.is_editor or user.is_admin) %}
 <script>
-document.getElementById('member-add-btn').addEventListener('click', async () => {
-    const num = document.getElementById('member-add-num').value;
+async function addClueByNumber(num) {
     if (!num) return;
     // Resolve legacy number -> clue id, then add
     const lookup = await fetch('/api/clues?legacy_number=' + num + '&page_size=1').then(r => r.json());
@@ -153,7 +161,43 @@ document.getElementById('member-add-btn').addEventListener('click', async () => 
     const resp = await fetch('/api/sequences/{{ seq.id }}/clues/' + cid, { method: 'POST' });
     if (resp.ok) { window.location.reload(); }
     else { alert('Could not add clue'); }
+}
+
+document.getElementById('member-add-btn').addEventListener('click', () => addClueByNumber(document.getElementById('member-add-num').value));
+// Pressing Enter in the "Clue legacy # to add" field confirms the add
+document.getElementById('member-add-num').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addClueByNumber(document.getElementById('member-add-num').value);
+    }
 });
+
+{% if seq.seq_type == 'author' %}
+document.getElementById('member-auto-btn').addEventListener('click', async () => {
+    const countRaw = document.getElementById('member-auto-count').value;
+    const count = parseInt(countRaw, 10);
+    if (!Number.isInteger(count) || count < 1 || count > 500) {
+        alert('Set a count between 1 and 500 before adding');
+        return;
+    }
+    const lookup = await fetch('/api/sequences/{{ seq.id }}/clues/auto-by-author', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ count: count }),
+    });
+    if (lookup.ok) {
+        const out = await lookup.json();
+        if (out.added.length === 0 && out.already_present.length === 0) {
+            alert('No clues found for author "' + {{ (seq.author or '')|tojson }} + '"');
+        } else {
+            window.location.reload();
+        }
+    } else {
+        const err = await lookup.json().catch(() => ({}));
+        alert(err.detail || 'Could not add clues');
+    }
+});
+{% endif %}
 document.querySelectorAll('.member-remove').forEach(btn => {
     btn.addEventListener('click', async () => {
         const resp = await fetch('/api/sequences/{{ seq.id }}/clues/' + btn.dataset.cid, { method: 'DELETE' });

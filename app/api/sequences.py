@@ -22,6 +22,7 @@ from app.schemas.sequence import (
     SequenceOut,
     SequenceListOut,
     SequenceMembershipUpdate,
+    SequenceAutoAddByAuthor,
 )
 
 router = APIRouter(prefix="/sequences", tags=["sequences"])
@@ -204,6 +205,58 @@ async def set_sequence_clues(
     await db.commit()
     db.expire(seq)  # discard cached relationship state so _serialize reloads membership
     return _serialize(seq)
+
+
+@router.post("/{sequence_id}/clues/auto-by-author")
+async def auto_add_by_author(
+    request: Request,
+    sequence_id: int,
+    body: SequenceAutoAddByAuthor,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add the author's `count` most recent clues to an author sequence.
+
+    "Most recent" means the highest legacy numbers (the spreadsheet's global
+    chronological ordering). Clues already in the sequence are skipped, so
+    re-running the same request is a no-op. Requires editor privileges.
+    """
+    _check_write_perm(request)
+    result = await db.execute(select(Sequence).where(Sequence.id == sequence_id))
+    seq = result.scalar_one_or_none()
+    if not seq:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    if seq.seq_type != "author" or not (seq.author or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Auto-add only works on author sequences with an author set",
+        )
+
+    author = seq.author.strip()
+    recent = (
+        await db.execute(
+            select(Clue)
+            .where(
+                func.lower(Clue.author) == author.lower(),
+                Clue.legacy_number.is_not(None),
+            )
+            .order_by(Clue.legacy_number.desc())
+            .limit(body.count)
+        )
+    ).scalars().all()
+
+    existing_ids = {c.id for c in seq.clues}
+    added: list[int] = []
+    already: list[int] = []
+    for clue in recent:
+        if clue.id in existing_ids:
+            already.append(clue.legacy_number)
+            continue
+        seq.clues.append(clue)
+        added.append(clue.legacy_number)
+    if added:
+        await db.commit()
+        await db.refresh(seq)
+    return {"added": added, "already_present": already, "requested": body.count}
 
 
 @router.post("/{sequence_id}/clues/{clue_id}", response_model=SequenceOut)
