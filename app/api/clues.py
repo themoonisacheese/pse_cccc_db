@@ -77,7 +77,7 @@ async def list_clues(
 
     # Full-text search
     if q:
-        tsquery = func.plainto_tsquery("english", q)
+        tsquery = func.plainto_tsquery("cccc_english", q)
         query = query.where(Clue.search_vector.op("@@")(tsquery))
         count_query = count_query.where(Clue.search_vector.op("@@")(tsquery))
 

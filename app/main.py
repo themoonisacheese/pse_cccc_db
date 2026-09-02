@@ -125,7 +125,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         # Run all migrations in order
-        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql", "migration_007_drop_answer_count.sql", "migration_008_ingest.sql", "migration_009_solutions.sql", "migration_010_rename_llm_extract.sql", "migration_011_sequences_tag.sql"]:
+        for migration_file in ["migration_001_fts.sql", "migration_002_editors.sql", "migration_003_generated_lengths.sql", "migration_004_drop_unused_columns.sql", "migration_005_solver_so_far.sql", "migration_006_sequences.sql", "migration_007_drop_answer_count.sql", "migration_008_ingest.sql", "migration_009_solutions.sql", "migration_010_rename_llm_extract.sql", "migration_011_sequences_tag.sql", "migration_012_nostop_fts.sql"]:
             migration_path = BASE_DIR.parent / "scripts" / migration_file
             if migration_path.exists():
                 migration_sql = migration_path.read_text()
@@ -255,7 +255,7 @@ async def search_page(
         count_query = select(func.count(Clue.id))
 
         if q:
-            tsquery = func.plainto_tsquery("english", q)
+            tsquery = func.plainto_tsquery("cccc_english", q)
             query = query.where(Clue.search_vector.op("@@")(tsquery))
             count_query = count_query.where(Clue.search_vector.op("@@")(tsquery))
         if author:
