@@ -75,19 +75,19 @@ class Candidate:
 def _word_lengths(text: str) -> list[int]:
     """Word lengths of a message, ignoring punctuation and the enumeration."""
     # Strip the trailing enumeration if present (it's not part of the answer).
-    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text.strip())
+    text = re.sub(r"\(\s*\d+(?:(?:\s*,\s*|\s+)\d+)*\s*\)\s*\.?\s*$", "", text.strip())
     words = re.findall(r"[A-Za-z']+", text)
     return [len(w) for w in words]
 
 
 def _enumeration_lengths(enumeration: str | None) -> list[int] | None:
-    """Parse "(4, 8)" -> [4, 8].  Returns None if no/invalid enumeration."""
+    """Parse "(4, 8)" or "(4 8)" -> [4, 8].  Returns None if no/invalid enum."""
     if not enumeration:
         return None
-    m = re.search(r"\(\s*(\d+(?:\s*,\s*\d+)*)\s*\)", enumeration)
+    m = re.search(r"\(\s*(\d+(?:(?:\s*,\s*|\s+)\d+)*)\s*\)", enumeration)
     if not m:
         return None
-    return [int(x) for x in re.split(r"\s*,\s*", m.group(1))]
+    return [int(x) for x in re.split(r"\s*,\s*|\s+", m.group(1))]
 
 
 def _matches_enumeration(text: str, enumeration: str | None) -> bool:
@@ -206,7 +206,7 @@ def _extract_caps_concat(text: str) -> str:
 
     e.g. "PA'S (_S) OVER" -> "PASSOVER".  Ignores the trailing enumeration.
     """
-    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text.strip())
+    text = re.sub(r"\(\s*\d+(?:(?:\s*,\s*|\s+)\d+)*\s*\)\s*\.?\s*$", "", text.strip())
     return "".join(ch for ch in text if ch.isupper() and ch.isalpha())
 
 
@@ -217,7 +217,7 @@ def _extract_caps_words(text: str) -> list[str]:
     "I" in "I FROG") is dropped (length < 2), so this avoids the caps-concat
     false positive while still catching clean multi-word answers.
     """
-    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text.strip())
+    text = re.sub(r"\(\s*\d+(?:(?:\s*,\s*|\s+)\d+)*\s*\)\s*\.?\s*$", "", text.strip())
     words: list[str] = []
     for token in re.split(r"[\s-]+", text):
         letters = re.sub(r"[^A-Za-z]", "", token)
@@ -233,7 +233,7 @@ def _extract_letters(text: str) -> str:
     letters are scattered across a message *with mixed case* — a case the
     caps-only extractors miss (the lowercase l/i are part of the answer).
     """
-    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text.strip())
+    text = re.sub(r"\(\s*\d+(?:(?:\s*,\s*|\s+)\d+)*\s*\)\s*\.?\s*$", "", text.strip())
     return "".join(ch for ch in text if ch.isalpha()).upper()
 
 
@@ -520,7 +520,7 @@ def _extract_answer(msg: WindowMessage) -> str:
     """
     text = (msg.content or "").strip()
     # Strip a trailing enumeration if present.
-    text = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)*\s*\)\s*\.?\s*$", "", text).strip()
+    text = re.sub(r"\(\s*\d+(?:(?:\s*,\s*|\s+)\d+)*\s*\)\s*\.?\s*$", "", text).strip()
     # If it's a confirmation ("yep"), it's not an answer.
     if RE_CONFIRM.fullmatch(text):
         return ""

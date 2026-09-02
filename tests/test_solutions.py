@@ -34,6 +34,21 @@ def test_enumeration_match():
     assert work == []
 
 
+def test_enumeration_match_space_separated():
+    w = _window(100, 1, 42, [
+        WindowMessage(message_id=101, user_id=42, user_name="solver",
+                      content="Two of hearts (3 2 6)"),
+        WindowMessage(message_id=102, user_id=99, user_name="other",
+                      content="unrelated chatter"),
+    ])
+    cands, work = detect(w, "(3 2 6)")
+    assert len(cands) == 1
+    c = cands[0]
+    assert c.solution == "Two of hearts"
+    assert c.confidence == 0.6
+    assert c.signals.get("enum_match")
+
+
 def test_hash_verification_salted():
     w = _window(200, 1, 42, [
         WindowMessage(message_id=201, user_id=42, user_name="solver",

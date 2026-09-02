@@ -2,7 +2,8 @@
 
 A message is accepted as a valid CCCC clue iff it has BOTH:
   1. a `CCCC` header, AND
-  2. a trailing enumeration in parentheses, e.g. `(10)` or `(4, 8)`.
+  2. a trailing enumeration in parentheses, e.g. `(10)`, `(4, 8)` or
+     `(2 3)` (comma- or whitespace-separated).
 
 Logging rule (as decided):
   - Accept (both criteria)          → ingest, no log needed.
@@ -27,13 +28,13 @@ from bs4 import BeautifulSoup
 # handled (that variant puts the closing bold after the colon).
 RE_HEADER = re.compile(r"^\s*\*{0,2}CCCC\*{0,2}\s*:?\s*\*{0,2}\s*", re.IGNORECASE)
 
-# A trailing enumeration in parentheses, e.g. (10), (4, 8), (3, 4, 5),
-# (4-2), (4 - 2), (4,2-3).  Word lengths may be separated by commas or
-# hyphens (the latter is common for multi-word answers like "4-2").
-# Allows optional whitespace inside and around the parens, and tolerates a
-# trailing period or other punctuation after the closing paren.
+# A trailing enumeration in parentheses, e.g. (10), (4, 8), (4-2), (2 3),
+# (4,2-3), (3, 4, 5).  Numbers may be separated by commas or hyphens (with
+# optional surrounding whitespace) or by bare whitespace.  Allows optional
+# whitespace inside and around the parens, and tolerates a trailing period
+# or other punctuation after the closing paren.
 RE_ENUMERATION = re.compile(
-    r"\(\s*\d+(?:\s*[-,]\s*\d+)*\s*\)\s*\.?\s*$"
+    r"\(\s*\d+(?:(?:\s*[-,]\s*|\s+)\d+)*\s*\)\s*\.?\s*$"
 )
 
 

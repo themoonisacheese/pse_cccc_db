@@ -25,6 +25,16 @@ def test_accept_multi_enumeration():
     assert d.enumeration == "(4, 8)"
 
 
+def test_accept_space_separated_enumeration():
+    d = decide("CCCC Something stacked (4 8)")
+    assert d.result is AcceptResult.ACCEPT
+    assert d.enumeration == "(4 8)"
+
+
+def test_extract_enumeration_space_separated():
+    assert extract_enumeration("a clue here (2 3)") == "(2 3)"
+
+
 def test_accept_bold_header():
     d = decide("**CCCC**: A clue with bold header (6)")
     assert d.result is AcceptResult.ACCEPT
