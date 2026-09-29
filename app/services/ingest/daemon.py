@@ -58,15 +58,30 @@ async def _get_or_create_bot_user(db) -> User:
 
 # Milestones the bot announces in chat when an author reaches them.
 MILESTONE_CLUE_NUMBERS = {1, 50}
+# Archive-wide milestones: announced when a clue's `legacy_number` (the number
+# in the original 1..N spreadsheet) lands on one of these.  Unlike the
+# per-author milestones above, these celebrate the archive as a whole.
+GLOBAL_MILESTONE_CLUE_NUMBERS = {10000}
 
 
-def _milestone_message(clue: Clue, author_id: int | None) -> str | None:
-    """Return a chat message to post for a milestone clue, else None.
+def _reply_to(message_id: int | None) -> str:
+    """Return the SE chat reply prefix for a message, or "" when unavailable.
+
+    SE chat derives a reply from a leading `:<message_id> ` in the raw message
+    text — the id of the *message* being replied to, not the author's user id.
+    The prefix must be the very first thing in the body or the reply is not
+    parsed.
+    """
+    return f":{message_id} " if message_id is not None else ""
+
+
+def _milestone_message(clue: Clue) -> str | None:
+    """Return a chat message to post for an author milestone clue, else None.
 
     `clues_by_author_so_far` is the "Nth clue by this author" pill computed
     by `ingest_clue` — the exact same metric the admin Clue Milestones page
     uses.  When it lands on a milestone (1st or 50th), we congratulate the
-    author in the room.
+    author in the room, replying to the clue message so they get a ping.
     """
     n = clue.clues_by_author_so_far
     if n not in MILESTONE_CLUE_NUMBERS:
@@ -75,10 +90,23 @@ def _milestone_message(clue: Clue, author_id: int | None) -> str | None:
         text = f"🎉 @{clue.author} just posted their very first clue! (#{clue.legacy_number})"
     else:
         text = f"🎉 @{clue.author} just posted their 50th clue! (#{clue.legacy_number})"
-    # Reply to the author so they get a ping.
-    if author_id is not None:
-        return f":{author_id} {text}"
-    return text
+    return _reply_to(clue.message_id) + text
+
+
+def _global_milestone_message(clue: Clue) -> str | None:
+    """Return a chat message when the archive as a whole hits a milestone.
+
+    Fires on the clue's archive-wide number (`legacy_number`), so it celebrates
+    the number itself being reached rather than one author's running tally.
+    Replies to the clue message so its author gets a ping.
+    """
+    if clue.legacy_number not in GLOBAL_MILESTONE_CLUE_NUMBERS:
+        return None
+    text = (
+        f"🎉🎉 #{clue.legacy_number} — @{clue.author} just posted the "
+        f"{clue.legacy_number:,}th clue in the archive! 🎉🎉"
+    )
+    return _reply_to(clue.message_id) + text
 
 
 async def _ingest_message(
@@ -151,8 +179,9 @@ async def _ingest_message(
     # Announce milestones in chat.  sechat's `send` is sync + network-bound,
     # so run it off the loop (fire-and-forget; never blocks ingest).
     if room is not None:
-        msg = _milestone_message(clue, author_id)
-        if msg is not None:
+        for msg in (_milestone_message(clue), _global_milestone_message(clue)):
+            if msg is None:
+                continue
             try:
                 await asyncio.to_thread(room.send, msg)
                 logger.info("Announced milestone for %s (clue #%s)", author, clue.legacy_number)
