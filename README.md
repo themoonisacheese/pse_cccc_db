@@ -353,9 +353,16 @@ docker compose up -d ingest          # or: python -m app.services.ingest
 If a clue was mis-formatted (or missed entirely), a human can insert it mid-chain
 through the web UI. The insert service bumps the `legacy_number` of everything
 after the insertion point and **recomputes the author/solver pills** for the
-shifted clues so the sequence counts stay correct. Renumbering is serialized with
-a transaction-scoped advisory lock and temporarily drops/recreates the partial
-unique index so intermediate row states can't trip it.
+shifted clues so the sequence counts stay correct. Deleting a numbered clue
+through the editor API shifts later legacy numbers down by one and recomputes their author/solver pills
+in the same transaction. Primary keys, message IDs, and surviving sequence
+memberships stay unchanged. Deleting an unnumbered clue does not renumber others.
+
+All application number-space writers, including automatic appends, share a transaction-scoped
+advisory lock. Range shifts temporarily set only affected legacy numbers to NULL
+and restore their final values before committing; other transactions continue to
+see committed numbers, and the partial unique index remains in place throughout.
+Failures roll back deletion and renumbering together.
 
 ### Catch-up and dedupe
 
@@ -476,15 +483,23 @@ python -m pytest            # run from the repo root
 - Pure-unit tests (no DB): `test_accept.py`, `test_window_manager.py`,
   `test_solutions.py`, `test_llm_prompt.py`, `test_transcript_parser.py`,
   `test_milestone.py`, `test_vendored_sechat.py`.
-- DB-backed async tests: `test_ingest_date.py`. They catch connection errors and
-  `pytest.skip()` when Postgres is unreachable, so the unit suite runs without a
-  database. They use `pytest.mark.asyncio`, which requires `pytest-asyncio` to
-  be installed (it is not pinned in `requirements-dev.txt`).
-- There is no shared fixture/conftest; tests construct objects directly and use
-  `SimpleNamespace`/small fakes to avoid network/DB.
+- DB-backed async tests require `pytest-asyncio` (pinned in development deps).
+  The older `test_ingest_date.py` tests skip when Postgres is unreachable.
+- `test_clue_delete.py` opts into real PostgreSQL only through
+  `CCCC_TEST_DATABASE_URL`; `tests/conftest.py` requires a disposable database
+  named `cccc_test_*`, isolates each test's schema, and rejects invalid or
+  unreachable explicit configurations rather than silently skipping failures.
+  The opt-in also redirects application async/sync database settings to that
+  test database. Never point a test run at live application data.
+
+```bash
+# Create a separate disposable database first, then run from the repo root:
+CCCC_TEST_DATABASE_URL='postgresql+asyncpg://test_user@localhost/cccc_test_local' \
+  python -m pytest -q -o asyncio_default_fixture_loop_scope=function
+```
 
 There is **no** lint config, formatter config, CI workflow, Makefile,
-`pyproject.toml`, `pytest.ini`, `setup.cfg`, or `conftest.py` in this repo.
+`pyproject.toml`, `pytest.ini`, or `setup.cfg` in this repo.
 
 ## Project Structure
 

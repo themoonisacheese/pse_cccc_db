@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.clue import Clue, ClueEditHistory
-from app.services.clue_service import ingest_clue as service_ingest_clue, update_clue as service_update_clue
+from app.services.clue_service import (
+    ingest_clue as service_ingest_clue,
+    update_clue as service_update_clue,
+    delete_clue as service_delete_clue,
+)
 from app.schemas.clue import (
     ClueCreate,
     ClueUpdate,
@@ -258,14 +262,12 @@ async def delete_clue(
     clue_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a clue. Requires editor privileges."""
+    """Delete a clue and compact later legacy numbers. Requires editor privileges."""
     user = _check_write_perm(request)
-    result = await db.execute(select(Clue).where(Clue.id == clue_id))
-    clue = result.scalar_one_or_none()
-    if not clue:
-        raise HTTPException(status_code=404, detail="Clue not found")
-    await db.delete(clue)
-    await db.commit()
+    try:
+        await service_delete_clue(db, actor=user, clue_id=clue_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ── Stats ─────────────────────────────────────────────────

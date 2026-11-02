@@ -13,14 +13,9 @@ from app.models.clue import Clue, ClueEditHistory, User
 
 logger = logging.getLogger(__name__)
 
-# Fixed advisory-lock key guarding the legacy_number space.  Any process that
-# renumbers clues (mid-chain insert, or moving a clue to a different position)
-# takes this lock for the duration of its transaction, so two renumbering
-# operations can never overlap.  This prevents the DROP/CREATE INDEX + bulk
-# shift (which take an AccessExclusiveLock on `clues`) from colliding with a
-# concurrent writer, which previously surfaced as DeadlockDetected 500s.
-# It is transaction-scoped (pg_advisory_xact_lock), so it auto-releases on
-# commit/rollback, and ordinary readers never take it — they are unaffected.
+# Transaction-scoped lock for every number-space writer, including appends.
+# Take it before reading a target number or MAX(number). Range shifts retain
+# the unique index, so callers' earlier plain reads cannot deadlock on DDL.
 _LEGACY_NUMBER_LOCK = text("SELECT pg_advisory_xact_lock(996744001)")
 
 
@@ -29,43 +24,67 @@ async def _acquire_renumber_lock(db: AsyncSession) -> None:
     await db.execute(_LEGACY_NUMBER_LOCK)
 
 
-async def _recompute_pills(db: AsyncSession, from_legacy: int) -> None:
-    """Recompute the author/solver pills for every clue at or after a position.
+async def _shift_legacy_numbers(
+    db: AsyncSession, *, start: int, delta: int, stop: Optional[int] = None,
+) -> int:
+    """Shift [start, stop) under the numbering lock, retaining the unique index.
 
-    The pills (`clues_by_author_so_far` / `clues_by_solver_so_far`) are defined
-    as "count of clues by this author/solver with legacy_number <= this clue's
-    legacy_number".  When a clue is inserted mid-chain, every clue that gets
-    shifted up (legacy_number >= insertion point) can have its pill change —
-    e.g. if the inserted clue is by the same author, every later clue by that
-    author gains one.  This recomputes them from scratch for correctness.
-
-    Mid-chain insertions are rare (a human fixing a missed/mis-formatted clue),
-    so recomputing per-clue is acceptable at ~10k rows.
+    Temporarily unnumber only the affected rows, then restore their final
+    numbers in bulk. NULL is excluded from the partial unique index; other
+    transactions see the previously committed numbers until we commit.
+    The caller owns the transaction and must roll it back on failure.
     """
-    result = await db.execute(
-        select(Clue).where(Clue.legacy_number >= from_legacy)
+    condition = Clue.legacy_number >= start
+    if stop is not None:
+        condition = condition & (Clue.legacy_number < stop)
+    rows = (await db.execute(
+        select(Clue.id, Clue.legacy_number).where(condition)
+    )).all()
+    if not rows:
+        return 0
+    await db.execute(
+        Clue.__table__.update().where(condition).values(legacy_number=None)
     )
-    shifted = result.scalars().all()
-    for clue in shifted:
-        clue.clues_by_author_so_far = (
-            await db.execute(
-                select(func.count(Clue.id)).where(
-                    Clue.author == clue.author,
-                    Clue.legacy_number <= clue.legacy_number,
-                )
-            )
-        ).scalar()
-        if clue.solver:
-            clue.clues_by_solver_so_far = (
-                await db.execute(
-                    select(func.count(Clue.id)).where(
-                        Clue.solver == clue.solver,
-                        Clue.legacy_number <= clue.legacy_number,
+    await db.execute(text("""
+        UPDATE clues AS c SET legacy_number = shifted.number
+        FROM unnest(CAST(:ids AS integer[]), CAST(:numbers AS integer[]))
+             AS shifted(id, number)
+        WHERE c.id = shifted.id
+    """), {
+        "ids": [row.id for row in rows],
+        "numbers": [row.legacy_number + delta for row in rows],
+    })
+    return len(rows)
+
+
+async def _recompute_pills(db: AsyncSession, from_legacy: int) -> None:
+    """Recount the affected tail using the complete numbered prefix.
+
+    Two window counts replace per-clue count queries. Unnumbered clues do not
+    contribute; NULL/empty solvers have no solver pill, as on ordinary ingest.
+    Call only after flushing all inserts/edits/deletions into their final state.
+    """
+    await db.execute(text("""
+        WITH counts AS (
+            SELECT id,
+                row_number() OVER (
+                    PARTITION BY author ORDER BY legacy_number
+                ) AS authored,
+                CASE WHEN solver IS NOT NULL AND solver <> '' THEN
+                    row_number() OVER (
+                        PARTITION BY solver ORDER BY legacy_number
                     )
-                )
-            ).scalar()
-        else:
-            clue.clues_by_solver_so_far = None
+                END AS solved
+            FROM clues WHERE legacy_number IS NOT NULL
+        )
+        UPDATE clues AS c
+        SET clues_by_author_so_far = counts.authored,
+            clues_by_solver_so_far = counts.solved
+        FROM counts
+        WHERE c.id = counts.id AND c.legacy_number >= :from_legacy
+          AND (c.clues_by_author_so_far IS DISTINCT FROM counts.authored
+               OR c.clues_by_solver_so_far IS DISTINCT FROM counts.solved)
+    """), {"from_legacy": from_legacy})
 
 
 async def ingest_clue(
@@ -91,88 +110,76 @@ async def ingest_clue(
     Returns the newly created Clue ORM object (already committed and
     refreshed).
     """
-    clue = Clue(
-        clue_text=clue_text,
-        author=author,
-        solver=solver,
-        solution=solution,
-        explanation=explanation,
-        transcript_link=transcript_link,
-        message_id=message_id,
-        source=source,
-        # Ingested clues carry no date in the SE chat payload; default to
-        # today (the date the clue was ingested) unless the caller supplied one.
-        clue_date=extra_fields.pop("clue_date", None) or date.today(),
-    )
+    try:
+        clue = Clue(
+            clue_text=clue_text,
+            author=author,
+            solver=solver,
+            solution=solution,
+            explanation=explanation,
+            transcript_link=transcript_link,
+            message_id=message_id,
+            source=source,
+            # Ingested clues carry no date in the SE chat payload; default to
+            # today (the date the clue was ingested) unless the caller supplied one.
+            clue_date=extra_fields.pop("clue_date", None) or date.today(),
+        )
 
-    # Set any extra fields the caller passed (e.g. one_word_answer_length)
-    for k, v in extra_fields.items():
-        if hasattr(clue, k) and v is not None:
-            setattr(clue, k, v)
+        # Set any extra fields the caller passed (e.g. one_word_answer_length)
+        for k, v in extra_fields.items():
+            if hasattr(clue, k) and v is not None:
+                setattr(clue, k, v)
 
-    # Normalise solution to uppercase on ingest (crosswords convention).
-    if clue.solution:
-        clue.solution = clue.solution.strip().upper()
+        # Normalise solution to uppercase on ingest (crosswords convention).
+        if clue.solution:
+            clue.solution = clue.solution.strip().upper()
 
-    clue.entered_by_user_id = actor.id
+        clue.entered_by_user_id = actor.id
 
-    # ── Legacy-number assignment ─────────────────────────────
-    if legacy_number is not None:
-        # Serialise against any concurrent renumbering (mid-chain edit) so the
-        # DROP INDEX / shift / CREATE INDEX dance can never deadlock with it.
+        # Appends must serialize too: MAX(number) read before a concurrent deletion
+        # would otherwise recreate a gap even after deletion itself was atomic.
         await _acquire_renumber_lock(db)
-        # Temporarily drop the partial unique index so the bulk shift
-        # (legacy_number + 1) doesn't trip a duplicate-key violation
-        # on intermediate row states.  Recreated after the shift, all
-        # within the same transaction.
-        await db.execute(text("DROP INDEX IF EXISTS uq_clues_legacy_number"))
-        # Shift existing clues up to make room (will be cheap at ~10k rows).
-        await db.execute(
-            Clue.__table__.update()
-            .where(Clue.legacy_number >= legacy_number)
-            .values(legacy_number=Clue.legacy_number + 1)
-        )
-        # Recreate the partial unique index.
-        await db.execute(text(
-            "CREATE UNIQUE INDEX uq_clues_legacy_number "
-            "ON clues (legacy_number) WHERE legacy_number IS NOT NULL"
-        ))
-        clue.legacy_number = legacy_number
-        # The shift changed legacy_numbers, so every clue that moved needs its
-        # author/solver pill recomputed (it may have gained entries).
-        await _recompute_pills(db, legacy_number)
-    else:
-        max_num = (
-            await db.execute(select(func.max(Clue.legacy_number)))
-        ).scalar()
-        clue.legacy_number = (max_num or 0) + 1
-    clue.clues_by_author_so_far = (
-        await db.execute(
-            select(func.count(Clue.id)).where(
-                Clue.author == clue.author,
-                Clue.legacy_number < clue.legacy_number,
-            )
-        )
-    ).scalar() + 1
-
-    if clue.solver:
-        clue.clues_by_solver_so_far = (
+        if legacy_number is not None:
+            await _shift_legacy_numbers(db, start=legacy_number, delta=1)
+            clue.legacy_number = legacy_number
+        else:
+            max_num = (
+                await db.execute(select(func.max(Clue.legacy_number)))
+            ).scalar()
+            clue.legacy_number = (max_num or 0) + 1
+        clue.clues_by_author_so_far = (
             await db.execute(
                 select(func.count(Clue.id)).where(
-                    Clue.solver == clue.solver,
+                    Clue.author == clue.author,
                     Clue.legacy_number < clue.legacy_number,
                 )
             )
         ).scalar() + 1
 
-    db.add(clue)
-    await db.commit()
-    await db.refresh(clue)
-    logger.info(
-        f"ingest_clue: #{clue.legacy_number} “{clue.clue_text[:60]}…” "
-        f"by {clue.author} (source={source}, msg_id={message_id})"
-    )
-    return clue
+        if clue.solver:
+            clue.clues_by_solver_so_far = (
+                await db.execute(
+                    select(func.count(Clue.id)).where(
+                        Clue.solver == clue.solver,
+                        Clue.legacy_number < clue.legacy_number,
+                    )
+                )
+            ).scalar() + 1
+
+        db.add(clue)
+        if legacy_number is not None:
+            await db.flush()
+            await _recompute_pills(db, legacy_number)
+        await db.commit()
+        await db.refresh(clue)
+        logger.info(
+            f"ingest_clue: #{clue.legacy_number} “{clue.clue_text[:60]}…” "
+            f"by {clue.author} (source={source}, msg_id={message_id})"
+        )
+        return clue
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def update_clue(
@@ -182,109 +189,103 @@ async def update_clue(
     clue_id: int,
     update_data: dict,
 ) -> Clue:
-    """Update an existing clue, recording edit history.
-    Shared by the HTTP PUT path and any future reconciliation logic.
-
-    If ``legacy_number`` is being changed to a value already taken by another
-    clue, the existing clue(s) are shifted (the same drop-index / shift /
-    recreate-index dance used by :func:`ingest_clue`) so the partial unique
-    index doesn't trip on intermediate row states.
-    """
-    result = await db.execute(select(Clue).where(Clue.id == clue_id))
-    clue = result.scalar_one_or_none()
-    if not clue:
-        raise ValueError(f"Clue {clue_id} not found")
-
-    # Normalise solution to uppercase.
-    if "solution" in update_data and update_data["solution"]:
-        update_data["solution"] = update_data["solution"].strip().upper()
-
-    # ── Legacy-number shifting ──────────────────────────────
-    new_legacy = update_data.get("legacy_number")
-    old_legacy = clue.legacy_number
-    if new_legacy is not None and new_legacy != old_legacy:
-        # Serialise against any concurrent renumbering (mid-chain insert/edit)
-        # so the DROP INDEX / shift / CREATE INDEX dance can never deadlock
-        # with it.
+    """Update and audit a clue, keeping numbering and affected pills consistent."""
+    try:
         await _acquire_renumber_lock(db)
-        # NULL out this clue's legacy_number first so it doesn't collide
-        # with the shifted rows or the recreated unique index.
-        await db.execute(
-            Clue.__table__.update()
-            .where(Clue.id == clue_id)
-            .values(legacy_number=None)
+        result = await db.execute(
+            select(Clue).where(Clue.id == clue_id)
+            .execution_options(populate_existing=True)
         )
-        # Temporarily drop the partial unique index so the bulk shift
-        # doesn't trip a duplicate-key violation on intermediate states.
-        await db.execute(text("DROP INDEX IF EXISTS uq_clues_legacy_number"))
-        if new_legacy < old_legacy:
-            # Moving earlier: shift clues in [new_legacy, old_legacy) up by 1.
+        clue = result.scalar_one_or_none()
+        if clue is None:
+            raise ValueError(f"Clue {clue_id} not found")
+
+        update_data = dict(update_data)
+        if update_data.get("solution"):
+            update_data["solution"] = update_data["solution"].strip().upper()
+
+        old_legacy = clue.legacy_number
+        new_legacy = update_data.get("legacy_number", old_legacy)
+        recompute_from = old_legacy
+        if new_legacy != old_legacy:
+            # Free the target's old position before restoring any shifted rows.
             await db.execute(
-                Clue.__table__.update()
-                .where(Clue.legacy_number >= new_legacy)
-                .where(Clue.legacy_number < old_legacy)
-                .values(legacy_number=Clue.legacy_number + 1)
+                Clue.__table__.update().where(Clue.id == clue_id)
+                .values(legacy_number=None)
             )
-            recompute_from = new_legacy
-        else:
-            # Moving later: shift clues in (old_legacy, new_legacy] down by 1.
+            if old_legacy is None:
+                await _shift_legacy_numbers(db, start=new_legacy, delta=1)
+                recompute_from = new_legacy
+            elif new_legacy is None:
+                await _shift_legacy_numbers(db, start=old_legacy + 1, delta=-1)
+            elif new_legacy < old_legacy:
+                await _shift_legacy_numbers(
+                    db, start=new_legacy, stop=old_legacy, delta=1,
+                )
+                recompute_from = new_legacy
+            else:
+                await _shift_legacy_numbers(
+                    db, start=old_legacy + 1, stop=new_legacy + 1, delta=-1,
+                )
             await db.execute(
-                Clue.__table__.update()
-                .where(Clue.legacy_number > old_legacy)
-                .where(Clue.legacy_number <= new_legacy)
-                .values(legacy_number=Clue.legacy_number - 1)
+                Clue.__table__.update().where(Clue.id == clue_id)
+                .values(legacy_number=new_legacy)
             )
-            recompute_from = old_legacy
-        # Set the clue's new legacy_number before recreating the index.
-        await db.execute(
-            Clue.__table__.update()
-            .where(Clue.id == clue_id)
-            .values(legacy_number=new_legacy)
+
+        for field, new_value in update_data.items():
+            old_value = getattr(clue, field, None)
+            if old_value != new_value:
+                db.add(ClueEditHistory(
+                    clue_id=clue.id,
+                    edited_by_user_id=actor.id,
+                    field_name=field,
+                    old_value=str(old_value) if old_value is not None else None,
+                    new_value=str(new_value) if new_value is not None else None,
+                ))
+                setattr(clue, field, new_value)
+
+        relevant = any(f in update_data for f in ("author", "solver", "legacy_number"))
+        if relevant and new_legacy is None:
+            clue.clues_by_author_so_far = None
+            clue.clues_by_solver_so_far = None
+        await db.flush()
+        if relevant and recompute_from is not None:
+            await _recompute_pills(db, recompute_from)
+        await db.commit()
+        await db.refresh(clue)
+        return clue
+    except Exception:
+        await db.rollback()
+        raise
+
+
+async def delete_clue(db: AsyncSession, *, actor: User, clue_id: int) -> None:
+    """Delete a clue and close its numbered position in the same transaction.
+
+    Stable primary keys, message IDs, and surviving relationships never change.
+    Existing foreign-key cascades remove only the deleted clue's dependants.
+    """
+    try:
+        await _acquire_renumber_lock(db)
+        result = await db.execute(
+            select(Clue).where(Clue.id == clue_id)
+            .execution_options(populate_existing=True)
         )
-        clue.legacy_number = new_legacy
-        # Recreate the partial unique index.
-        await db.execute(text(
-            "CREATE UNIQUE INDEX uq_clues_legacy_number "
-            "ON clues (legacy_number) WHERE legacy_number IS NOT NULL"
-        ))
-        # The shift changed legacy_numbers, so every clue that moved needs its
-        # author/solver pill recomputed.
-        await _recompute_pills(db, recompute_from)
-        # Don't double-apply legacy_number in the field loop below.
-        update_data.pop("legacy_number", None)
-
-    for field, new_value in update_data.items():
-        old_value = getattr(clue, field, None)
-        if old_value != new_value:
-            history = ClueEditHistory(
-                clue_id=clue.id,
-                edited_by_user_id=actor.id,
-                field_name=field,
-                old_value=str(old_value) if old_value is not None else None,
-                new_value=str(new_value) if new_value is not None else None,
+        clue = result.scalar_one_or_none()
+        if clue is None:
+            raise ValueError(f"Clue {clue_id} not found")
+        old_legacy = clue.legacy_number
+        actor_id = actor.id
+        await db.delete(clue)
+        await db.flush()
+        if old_legacy is not None:
+            shifted = await _shift_legacy_numbers(
+                db, start=old_legacy + 1, delta=-1,
             )
-            db.add(history)
-            setattr(clue, field, new_value)
-
-    # Recompute author/solver pills if relevant fields changed.
-    if any(f in update_data for f in ("author", "solver", "legacy_number")):
-        clue.clues_by_author_so_far = (
-            await db.execute(
-                select(func.count(Clue.id)).where(
-                    Clue.author == clue.author,
-                    Clue.legacy_number < clue.legacy_number,
-                )
-            )
-        ).scalar() + 1
-        clue.clues_by_solver_so_far = (
-            await db.execute(
-                select(func.count(Clue.id)).where(
-                    Clue.solver == clue.solver,
-                    Clue.legacy_number < clue.legacy_number,
-                )
-            )
-        ).scalar() + 1 if clue.solver else None
-
-    await db.commit()
-    await db.refresh(clue)
-    return clue
+            if shifted:
+                await _recompute_pills(db, old_legacy)
+        await db.commit()
+        logger.info("delete_clue: id=%s legacy=%s actor=%s", clue_id, old_legacy, actor_id)
+    except Exception:
+        await db.rollback()
+        raise
