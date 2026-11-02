@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Optional
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy import select, update
@@ -47,6 +48,32 @@ SYSTEM_PROMPT = (
     "enumeration (word lengths). Reply with ONLY the answer, in lowercase, "
     "no punctuation, no explanation."
 )
+
+
+def _completion_payload(*, base_url: str, model: str, user_prompt: str) -> dict:
+    """Keep provider-specific controls out of the extraction contract."""
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.0,
+        "max_tokens": 60,
+        "thinking": {"type": "disabled"},  # Legacy Hyper behavior.
+    }
+    if urlsplit(base_url).hostname == "openrouter.ai":
+        payload.pop("thinking")  # Hyper's switch is not an OpenRouter control.
+        payload["usage"] = {"include": True}
+        if model.startswith("openai/"):
+            payload["provider"] = {"only": ["openai"], "allow_fallbacks": False}
+            if model.startswith("openai/gpt-5"):
+                payload.pop("temperature")  # Not supported by these endpoints.
+            if model == "openai/gpt-5.4" or model.startswith("openai/gpt-5.4-"):
+                # This family supports none; older GPT-5 variants do not.
+                # Sixty tokens must be available for the visible answer.
+                payload["reasoning"] = {"effort": "none"}
+    return payload
 
 
 class LlmWorker:
@@ -233,20 +260,11 @@ class LlmWorker:
             enumeration=enumeration,
             transcript=transcript,
         )
-        payload = {
-            "model": settings.llm_model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.0,
-            "max_tokens": 60,
-            # The deployed model is a reasoning model: without this it burns
-            # the whole max_tokens budget on hidden reasoning tokens and
-            # returns an empty content.  Disabling thinking makes it answer
-            # directly (verified against the provider: 4 tokens, finish=stop).
-            "thinking": {"type": "disabled"},
-        }
+        payload = _completion_payload(
+            base_url=settings.llm_base_url,
+            model=settings.llm_model,
+            user_prompt=user_prompt,
+        )
         headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -257,7 +275,13 @@ class LlmWorker:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return (data["choices"][0]["message"]["content"] or "").strip()
+                choice = data["choices"][0]
+                content = choice["message"]["content"]
+                if choice.get("finish_reason") != "stop" or not isinstance(content, str) or not content.strip():
+                    # Never mark a queued task done with a hidden-reasoning-only,
+                    # empty, filtered, or token-truncated completion.
+                    raise _LlmUnavailable("Incomplete or empty LLM completion")
+                return content.strip()
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in (429, 500, 502, 503, 504):
                 raise _LlmUnavailable(str(exc)) from exc

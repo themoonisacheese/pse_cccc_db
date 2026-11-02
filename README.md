@@ -551,3 +551,18 @@ pse_cccc_db/
 - **Clue content**: [CC-BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
   — the clue text, solutions, and explanations are contributed by Puzzling SE
   users and are not included in the source repository.
+### OpenRouter / OpenAI stopgap
+
+The answer-only worker can use OpenRouter with an OpenAI BYOK credential configured in your OpenRouter account:
+
+```dotenv
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=openai/gpt-5.4-nano
+LLM_API_KEY=<your OpenRouter key, not the upstream OpenAI key>
+```
+
+For OpenRouter OpenAI models the worker pins the OpenAI provider and disables provider fallback. GPT-5.4 requests explicitly disable reasoning and omit unsupported temperature controls; the Hyper-only `thinking` switch is not sent. The existing prompt,60-token visible-answer allowance,30-second timeout and human-review workflow remain unchanged. Empty or truncated completions are failures, not successfully completed queue tasks.
+
+A provider pin does not itself change your account's BYOK/shared-capacity fallback policy. Verify `is_byok` in generation metadata before cutover; configure BYOK-only in your account if shared-capacity fallback must never be used. Do not reset failed tasks or change auto-accept thresholds as part of a provider switch.
+
+Recreate the `ingest` service after changing `.env` (`docker compose up -d --no-deps --force-recreate ingest`); a plain container restart does not reload Compose's env-file settings. Back up the previous config privately and verify queue progress and provider responses after cutover. Do not recreate the database or import benchmark reviews into production.
