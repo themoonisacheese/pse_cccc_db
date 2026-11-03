@@ -4,6 +4,7 @@ from datetime import datetime, date
 from sqlalchemy import (
     Computed,
     Integer,
+    BigInteger,
     String,
     Text,
     Date,
@@ -156,3 +157,16 @@ class IngestState(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class AnniversaryAnnouncement(Base):
+    """One-shot anniversary send ledger, committed before the network call."""
+
+    __tablename__ = "anniversary_announcements"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

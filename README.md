@@ -581,3 +581,38 @@ For OpenRouter OpenAI models the worker pins the OpenAI provider and disables pr
 A provider pin does not itself change your account's BYOK/shared-capacity fallback policy. Verify `is_byok` in generation metadata before cutover; configure BYOK-only in your account if shared-capacity fallback must never be used. Do not reset failed tasks or change auto-accept thresholds as part of a provider switch.
 
 Recreate the `ingest` service after changing `.env` (`docker compose up -d --no-deps --force-recreate ingest`); a plain container restart does not reload Compose's env-file settings. Back up the previous config privately and verify queue progress and provider responses after cutover. Do not recreate the database or import benchmark reviews into production.
+
+
+## Tenth anniversary announcement
+
+The ingest daemon owns a one-time birthday reply to message `33517331` in
+The Sphinx's Lair (room `14524`). The original chat event's raw `time_stamp`
+is `1479180806`: **2016-11-15 03:33:26 UTC**. Its tenth calendar anniversary is
+**2026-11-15 03:33:26 UTC**, epoch `1794713606` (04:33:26 Europe/Paris).
+The scheduler uses aware UTC datetimes, independent of host/container `TZ`,
+and rechecks the wall clock at least once a minute. The startup log includes
+both UTC and process-local target times. Keep the host clock NTP-synchronised.
+The POST starts when due, with ordinary database/network latency afterwards.
+
+The reply contains total archived clues, clues/day over 3,652 elapsed days,
+setter count, and busiest dated day. Stats are computed when due, not at
+startup. Counts include undated archive entries but exclude dates outside
+2016-11-15 through 2026-11-15. Setters are distinct nonempty display names
+(trimmed and case-folded by PostgreSQL lower), not verified unique humans.
+Undated clues do not participate in busiest-day ranking. Ties use the earliest
+day. No LLM calls are involved.
+
+Apply `scripts/migration_013_anniversary.sql` before restarting ingest (web
+startup also applies it). It creates only `anniversary_announcements`, with
+one pending record `cccc-10-years`. The daemon checks this record on delivery.
+An atomic claim committed **before** posting prevents concurrent workers and
+restarts from posting twice. `sent` retains the posted message ID and body.
+A crash or ambiguous network failure leaves `sending`: inspect the room before
+any manual recovery, **never blindly reset/retry**. Exactly-once remote delivery
+cannot be guaranteed without chat API idempotency support. A restart up to ten
+minutes late can catch up. Beyond that it marks the record `missed` without
+posting. Migration reruns never reset existing claims. Stop/revert the ingest
+code to disarm the job, leaving the ledger intact.
+
+Tests simulate chat sends and run DB/concurrency cases only against explicitly
+opted-in disposable PostgreSQL databases via `CCCC_TEST_DATABASE_URL`.

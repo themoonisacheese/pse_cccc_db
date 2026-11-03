@@ -33,6 +33,7 @@ from app.services.ingest.window import from_event
 from app.services.ingest.window_manager import WindowManager
 from app.services.ingest.persist import process_window
 from app.services.ingest.llm_worker import LlmWorker
+from app.services.ingest.anniversary import run_anniversary
 from app.services.clue_service import ingest_clue
 
 logger = logging.getLogger(__name__)
@@ -266,10 +267,13 @@ class IngestDaemon:
         # Start the in-process LLM worker (drains pending_llm in the
         # background; never blocks ingest).
         self.llm_worker.start()
+        anniversary_task = asyncio.create_task(run_anniversary(self.room))
         # Keep the event loop alive; sechat's room thread does the work.
         try:
             await asyncio.Event().wait()
-        except asyncio.CancelledError:
+        finally:
+            anniversary_task.cancel()
+            await asyncio.gather(anniversary_task, return_exceptions=True)
             logger.info("Shutting down ingest daemon")
             await self.llm_worker.stop()
             if self.room is not None:
